@@ -1,0 +1,49 @@
+C51 COMPILER V7.50   PAGE_HANDLER                                                          06/16/2017 08:24:39 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE PAGE_HANDLER
+OBJECT MODULE PLACED IN .\Object\page_handler.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE i51\page_handler.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..\
+                    -tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\page_handler.lst) TABS(2) OBJECT(.\Object\page_handler.obj)
+
+line level    source
+
+   1          #include "sys.h"
+   2          #include "tw_widget_sys.h"
+   3          #include "res.h"
+   4          #include "page_RGB.h"
+   5          #include "ignore_page.h"
+   6          
+   7          unsigned char tw_page_handler(unsigned char id, TW_EVENT* event)
+   8          {
+   9   1        unsigned char rc=0;
+  10   1        switch(id)
+  11   1        {
+  12   2          case ID_PAGE_RGB:
+  13   2            rc = page_RGB_process(event);
+  14   2          break;
+  15   2          default:  /* put to nodify if no process this event */
+  16   2            rc = TW_RETURN_NO_PAGE;
+  17   2          break;
+  18   2        }
+  19   1      
+  20   1        return rc;
+  21   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     18    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

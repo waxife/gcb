@@ -1,0 +1,335 @@
+C51 COMPILER V7.50   TW_IRQ                                                                06/16/2017 08:24:33 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE TW_IRQ
+OBJECT MODULE PLACED IN .\Object\tw_irq.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\sys\tw_irq.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys
+                    -;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\tw_irq.lst) TABS(2) OBJECT(.\Object\tw_irq.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   tw_isr.c
+   3           *  @brief  system irq entry
+   4           *  $Id: tw_irq.c,v 1.6 2013/04/02 05:42:18 dos1236 Exp $
+   5           *  $Author: dos1236 $
+   6           *  $Revision: 1.6 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "reg_tw.h"
+  16          #include "tw_irq.h"
+  17          
+  18          /*
+  19           * P6_12      Scaler Interrupt Status 1
+  20           *  [7]   R/W   IR_Packet (Write 1 Clear)
+  21           *  [6]   R/W   SPI_DMA_Done_Int (Write 1 Clear)
+  22           *  [5]   R/W   VSYNC Lead.edge (Write 1 Clear)
+  23           *  [4]   R/W   10ms Time Out (Write 1 Clear)
+  24           *  [3]   R/W   HSYNC timing Chg (Write 1 Clear)
+  25           *  [2]   R/W   VSYNC timing Chg (Write 1 Clear)
+  26           *  [1]   R/W   HSYNC missing (Write 1 Clear)
+  27           *  [0]   R/W   VSYNC missing (Write 1 Clear)   
+  28           *
+  29           * P6_13      Scaler Interrupt Status 2
+  30           *  [7]   R/W   CQ_int (Write 1 Clear)
+  31           *  [6]   R/W   GPIO_INT (Write 1 Clear)
+  32           *  [5]   R/W   uart1_int (Write 1 Clear)
+  33           *  [4]   R/W   uart0_int (Write 1 Clear)
+  34           *  [3]   R/W   ShutDn_Warning (Write 1 Clear)
+  35           *  [2]   R/W   ShortVS (Write 1 Clear)
+  36           *  [1]   R/W   SAR1_Toggle (Write 1 Clear)
+  37           *  [0]   R/W   SAR0_Toggle (Write 1 Clear)
+  38           *
+  39           * P6_14      Scaler Interrupt Mask 1
+  40           *  [7]   R/W   Mask IR_Packet
+  41           *  [6]   R/W   Mask SPI_DMA_Done_Int
+  42           *  [5]   R/W   Mask VSYNCedg.int
+  43           *  [4]   R/W   Mask 10ms Time Out
+  44           *  [3]   R/W   Mask HSYNC Chg
+  45           *  [2]   R/W   Mask VSYNC Chg
+  46           *  [1]   R/W   Mask HSYNC miss
+  47           *  [0]   R/W   Mask VSYNC miss
+  48           *
+  49           * P6_15      Scaler Interrupt Mask 2
+  50           *  [7]   R/W   Mask CQ_int
+  51           *  [6]   R/W   Mask Int_GPIO
+  52           *  [5]   R/W   Mask uart1_int
+  53           *  [4]   R/W   Mask uart0_int
+  54           *  [3]   R/W   Mask SHDN_Warning
+C51 COMPILER V7.50   TW_IRQ                                                                06/16/2017 08:24:33 PAGE 2   
+
+  55           *  [2]   R/W   Mask ShortVS
+  56           *  [1]   R/W   Mask_SAR1_Toggle
+  57           *  [0]   R/W   Mask_SAR0_Toggle
+  58           */
+  59          #define INT_STATUS_REG1       IC_ReadByte(TWIC_P6, 0x12)
+  60          #define INT_STATUS_REG2       IC_ReadByte(TWIC_P6, 0x13)
+  61          #define INT_MASK_REG1       IC_ReadByte(TWIC_P6, 0x14)
+  62          #define INT_MASK_REG2       IC_ReadByte(TWIC_P6, 0x15)
+  63          
+  64          #define INT_STATUS_CLEAR1(VAL)    do { IC_WritByte(TWIC_P6, 0x12, VAL); } while (0)
+  65          #define INT_STATUS_CLEAR2(VAL)    do { IC_WritByte(TWIC_P6, 0x13, VAL); } while (0)
+  66          #define INT_MASK_SET1(VAL)      do { IC_WritByte(TWIC_P6, 0x14, VAL); } while (0)
+  67          #define INT_MASK_SET2(VAL)      do { IC_WritByte(TWIC_P6, 0x15, VAL); } while (0)
+  68          
+  69          #define INT_STATUS_REG1_INT     IC_ReadByte_INT(TWIC_P6, 0x12)
+  70          #define INT_STATUS_REG2_INT     IC_ReadByte_INT(TWIC_P6, 0x13)
+  71          #define INT_MASK_REG1_INT     IC_ReadByte_INT(TWIC_P6, 0x14)
+  72          #define INT_MASK_REG2_INT     IC_ReadByte_INT(TWIC_P6, 0x15)
+  73          
+  74          #define INT_STATUS_CLEAR1_INT(VAL)  do { IC_WritByte_INT(TWIC_P6, 0x12, VAL); } while (0)
+  75          #define INT_STATUS_CLEAR2_INT(VAL)  do { IC_WritByte_INT(TWIC_P6, 0x13, VAL); } while (0)
+  76          #define INT_MASK_SET1_INT(VAL)    do { IC_WritByte_INT(TWIC_P6, 0x14, VAL); } while (0)
+  77          #define INT_MASK_SET2_INT(VAL)    do { IC_WritByte_INT(TWIC_P6, 0x15, VAL); } while (0)
+  78          
+  79          /* STATUS POLARITY */
+  80          #define POL1_VSYNC_MISS   (1 << 0)
+  81          #define POL1_HSYNC_MISS   (1 << 1)
+  82          #define POL1_VSYNC_CHG    (1 << 2)
+  83          #define POL1_HSYNC_CHG    (1 << 3)
+  84          #define POL1_10MS_TIME    (1 << 4)
+  85          #define POL1_VSYNC_LEAD   (1 << 5)
+  86          #define POL1_SPI_DMA    (1 << 6)
+  87          #define POL1_IR_PACKET    (1 << 7)
+  88          
+  89          #define POL2_SAR0_TOGGLE  (1 << 0)
+  90          #define POL2_SAR1_TOGGLE  (1 << 1)
+  91          #define POL2_SHORT_VS   (1 << 2)
+  92          #define POL2_HSYNC_CHG    (1 << 3)
+  93          #define POL2_UART0_INT    (1 << 4)
+  94          #define POL2_UART1_INT    (1 << 5)
+  95          #define POL2_GPIO_INT   (1 << 6)
+  96          #define POL2_CQ_INT     (1 << 7)
+  97          
+  98          /* MASK POLARITY */
+  99          #define MASK1_VSYNC_MISS  (1 << 0)
+ 100          #define MASK1_HSYNC_MISS  (1 << 1)
+ 101          #define MASK1_VSYNC_CHG   (1 << 2)
+ 102          #define MASK1_HSYNC_CHG   (1 << 3)
+ 103          #define MASK1_10MS_TIME   (1 << 4)
+ 104          #define MASK1_VSYNC_LEAD  (1 << 5)
+ 105          #define MASK1_SPI_DMA   (1 << 6)
+ 106          #define MASK1_IR_PACKET   (1 << 7)
+ 107          
+ 108          #define MASK2_SAR0_TOGGLE (1 << 0)
+ 109          #define MASK2_SAR1_TOGGLE (1 << 1)
+ 110          #define MASK2_SHORT_VS    (1 << 2)
+ 111          #define MASK2_HSYNC_CHG   (1 << 3)
+ 112          #define MASK2_UART0_INT   (1 << 4)
+ 113          #define MASK2_UART1_INT   (1 << 5)
+ 114          #define MASK2_GPIO_INT    (1 << 6)
+ 115          #define MASK2_CQ_INT    (1 << 7)
+ 116          
+C51 COMPILER V7.50   TW_IRQ                                                                06/16/2017 08:24:33 PAGE 3   
+
+ 117          static unsigned char data INT_MASK_REG1_BK = 0, INT_MASK_REG2_BK = 0;
+ 118          /*
+ 119           * 摘要 :void backup_tw_irq (void)
+ 120           *
+ 121           * 描述 :备份所有IRQ中断状态
+ 122           *
+ 123           * 参数 :无
+ 124           *
+ 125           * 回传值 : 无
+ 126           *
+ 127           * 注意 : 无
+ 128          */
+ 129          void backup_tw_irq (void)
+ 130          {
+ 131   1        INT_MASK_REG1_BK = INT_MASK_REG1;
+ 132   1        INT_MASK_REG2_BK = INT_MASK_REG2;
+ 133   1      }
+ 134          /*
+ 135           * 摘要 :void mute_tw_irq (void)
+ 136           *
+ 137           * 描述 :关闭所有IRQ中断
+ 138           *
+ 139           * 参数 :无
+ 140           *
+ 141           * 回传值 : 无
+ 142           *
+ 143           * 注意 : 无
+ 144          */
+ 145          void mute_tw_irq (void)
+ 146          {
+ 147   1        INT_MASK_REG1_BK = INT_MASK_REG1;
+ 148   1        INT_MASK_REG2_BK = INT_MASK_REG2;
+ 149   1      
+ 150   1        //DBG_PRINT("MUTE MASK1= 0x%bX!\r\n", INT_MASK_REG1_BK);
+ 151   1        //DBG_PRINT("MUTE MASK2= 0x%bX!\r\n", INT_MASK_REG2_BK);
+ 152   1      
+ 153   1        INT_MASK_SET1(0xFF);
+ 154   1        INT_MASK_SET2(0xFF);
+ 155   1      }
+ 156          /*
+ 157           * 摘要 :void restore_tw_irq (void)
+ 158           *
+ 159           * 描述 :回复IRQ之前的状态
+ 160           *
+ 161           * 参数 :无
+ 162           *
+ 163           * 回传值 : 无
+ 164           *
+ 165           * 注意 : 无
+ 166          */
+ 167          void restore_tw_irq (void)
+ 168          {
+ 169   1        //DBG_PRINT("RE MASK1= 0x%bX!\r\n", INT_MASK_REG1_BK);
+ 170   1        //DBG_PRINT("RE MASK2= 0x%bX!\r\n", INT_MASK_REG2_BK);
+ 171   1      
+ 172   1        INT_MASK_SET1(INT_MASK_REG1_BK);
+ 173   1        INT_MASK_SET2(INT_MASK_REG2_BK);
+ 174   1      }
+ 175          
+ 176          /*
+ 177           * Level triggered interrupts need to write 1 clear
+ 178           */
+C51 COMPILER V7.50   TW_IRQ                                                                06/16/2017 08:24:33 PAGE 4   
+
+ 179          /*
+ 180           * 摘要 :void clear_tw_irq(unsigned char irq_nr)
+ 181           *
+ 182           * 描述 :清除某个IRQ中断状态　写一清零
+ 183           *
+ 184           * 参数 :unsigned char irq_nr ＝＞要清除的IRQ号码
+ 185           *
+ 186           * 回传值 : 无
+ 187           *
+ 188           * 注意 : 无
+ 189          */
+ 190          void clear_tw_irq(unsigned char irq_nr)
+ 191          {
+ 192   1        unsigned char data clear;
+ 193   1        if(irq_nr<8) {
+ 194   2          clear = (1 << irq_nr);
+ 195   2          INT_STATUS_CLEAR1_INT(clear);
+ 196   2        } else {
+ 197   2          clear = (1 << (irq_nr-8));
+ 198   2          INT_STATUS_CLEAR2_INT(clear);
+ 199   2        }
+ 200   1      }
+ 201          /*
+ 202           * 摘要 :void disable_tw_irq(unsigned char irq_nr)
+ 203           *
+ 204           * 描述 :关闭某个IRQ
+ 205           *
+ 206           * 参数 :unsigned char irq_nr ＝＞要关闭的IRQ号码
+ 207           *
+ 208           * 回传值 : 无
+ 209           *
+ 210           * 注意 : 无
+ 211          */
+ 212          void disable_tw_irq(unsigned char irq_nr)
+ 213          {
+ 214   1        unsigned char data mask;
+ 215   1        if(irq_nr<8) {
+ 216   2          mask = INT_MASK_REG1;
+ 217   2          mask |= (1 << irq_nr);
+ 218   2          INT_MASK_SET1(mask);
+ 219   2          //DBG_PRINT("DISABLE MASK1= 0x%bX!\r\n", mask);
+ 220   2        } else {
+ 221   2          mask = INT_MASK_REG2;
+ 222   2          mask |= (1 << (irq_nr-8));
+ 223   2          INT_MASK_SET2(mask);
+ 224   2          //DBG_PRINT("DISABLE MASK2= 0x%bX!\r\n", mask);
+ 225   2        }
+ 226   1      }
+ 227          /*
+ 228           * 摘要 :void enable_tw_irq(unsigned char irq_nr)
+ 229           *
+ 230           * 描述 :开启某个IRQ
+ 231           *
+ 232           * 参数 :unsigned char irq_nr ＝＞要开启IRQ号码
+ 233           *
+ 234           * 回传值 : 无
+ 235           *
+ 236           * 注意 : 无
+ 237          */
+ 238          void enable_tw_irq(unsigned char irq_nr)
+ 239          {
+ 240   1        unsigned char data mask;
+C51 COMPILER V7.50   TW_IRQ                                                                06/16/2017 08:24:33 PAGE 5   
+
+ 241   1        if(irq_nr<8) {
+ 242   2          mask = INT_MASK_REG1;
+ 243   2          mask &= ~(1 << irq_nr);
+ 244   2          INT_MASK_SET1(mask);
+ 245   2        } else {
+ 246   2          mask = INT_MASK_REG2;
+ 247   2          mask &= ~(1 << (irq_nr-8));
+ 248   2          INT_MASK_SET2(mask);
+ 249   2        }
+ 250   1      }
+ 251          /*
+ 252           * 摘要 :unsigned short tw_irq_dispatch(void)
+ 253           *
+ 254           * 描述 :得到IRQ开关状态
+ 255           *
+ 256           * 参数 :无
+ 257           *
+ 258           * 回传值 : 无
+ 259           *
+ 260           * 注意 : 无
+ 261          */
+ 262          unsigned short tw_irq_dispatch(void)
+ 263          {
+ 264   1        unsigned char data status1=0;
+ 265   1        unsigned char data status2=0;
+ 266   1        unsigned char data mask1=0xFF;
+ 267   1        unsigned char data mask2=0xFF;
+ 268   1        
+ 269   1        status1 = INT_STATUS_REG1_INT;
+ 270   1        status2 = INT_STATUS_REG2_INT;
+ 271   1        mask1 = INT_MASK_REG1_INT;
+ 272   1        mask2 = INT_MASK_REG2_INT;
+ 273   1      
+ 274   1        status1 &=(~mask1);
+ 275   1        status2 &=(~mask2);
+ 276   1        
+ 277   1        return ((status2<<8)|status1);
+ 278   1      }
+ 279          /*
+ 280           * 摘要 :void init_IRQ(void)
+ 281           *
+ 282           * 描述 :IRQ 初始化
+ 283           *
+ 284           * 参数 :无
+ 285           *
+ 286           * 回传值 : 无
+ 287           *
+ 288           * 注意 : 预设全部关掉
+ 289          */
+ 290          void init_IRQ(void)
+ 291          {
+ 292   1        INT_MASK_SET1(0xFF);    /* all interrupt mask on */
+ 293   1        INT_MASK_SET2(0xFF);
+ 294   1        INT_STATUS_CLEAR1(0xFF);  /* all status clear */
+ 295   1        INT_STATUS_CLEAR2(0xFF);
+ 296   1        backup_tw_irq();
+ 297   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    446    ----
+   CONSTANT SIZE    =   ----    ----
+C51 COMPILER V7.50   TW_IRQ                                                                06/16/2017 08:24:33 PAGE 6   
+
+   XDATA SIZE       =   ----       3
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,283 @@
+C51 COMPILER V7.50   NVP6124_DRV                                                           06/16/2017 08:24:37 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE NVP6124_DRV
+OBJECT MODULE PLACED IN .\Object\nvp6124_drv.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\nvp6124_drv.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\s
+                    -ys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\nvp6124_drv.lst) TABS(2) OBJECT(.\Object\nvp6124_drv.obj)
+
+line level    source
+
+   1          #include <reg51.h>
+   2          #include "sys.h"
+   3          #include "tw_irq.h"
+   4          #include "serial.h"
+   5          #include "cq.h"
+   6          #include "sarkey.h"
+   7          //#include "img_ctrl.h"
+   8          //#include "xgpio.h"
+   9          #include "i51_i2c_master.h"
+  10          #include "i51_i2c_gpio.h"
+  11          #include "timer.h"
+  12          
+  13          #include "nvp6124.h"
+  14          #include "video.h"
+  15          #include "common.h"
+  16          
+  17          unsigned char chip_id[4];
+  18          unsigned char nvp6124_mode = 1;  //0:ntsc, 1: pal
+  19          unsigned char nvp6124_difinition = NVP6124_VI_720P_2530;
+  20          unsigned char nvp6124_mode_bak = 0xFF;
+  21          unsigned char nvp6124_cnt = 0;//source variable
+  22          unsigned char channel = 0;//current channel no.
+  23          const unsigned char nvp6124_slave_addr[4] = {0x60, 0x62, 0x64, 0x66};
+  24          extern unsigned char ch_mode_status[16];
+  25          //extern void nvp6124_datareverse(void);
+  26          
+  27          unsigned char check_id(unsigned char dec)
+  28          {
+  29   1        unsigned char ret;
+  30   1        gpio_i2c_write(dec, 0xFF, 0x00);
+  31   1        ret = gpio_i2c_read(dec, 0xf4);
+  32   1        return ret;
+  33   1      }
+  34          
+  35          //extern unsigned char g_coax_ch;
+  36          unsigned char vloss=0xFFFF;
+  37          
+  38          
+  39          void nvp6124_module_init(unsigned char mode)
+  40          {
+  41   1        int ret = 0, i = 0;
+  42   1      //    unsigned char i2c_addr;
+  43   1        nvp6124_video_mode vmode;
+  44   1        
+  45   1      
+  46   1        nvp6124_mode = mode;
+  47   1      
+  48   1        printk("NVP6124&NVP6114A Test Driver 2015.3.16\n");
+  49   1      
+  50   1        for(i=0;i<4;i++)
+  51   1        {
+  52   2          chip_id[i] = check_id(nvp6124_slave_addr[i]);
+  53   2          if( (chip_id[i] != NVP6124_R0_ID ) && (chip_id[i] != NVP6114A_R0_ID ) )
+  54   2          {
+C51 COMPILER V7.50   NVP6124_DRV                                                           06/16/2017 08:24:37 PAGE 2   
+
+  55   3            printk("nvp6124/6114a Device ID Error... %x\n",(unsigned short)chip_id[i]);
+  56   3          }
+  57   2          else
+  58   2          {
+  59   3            printk("nvp6124/6114a Device (0x%x) ID OK... %x\n", (unsigned short)nvp6124_slave_addr[i], (unsigned sh
+             -ort)chip_id[i]);
+  60   3            nvp6124_cnt++;
+  61   3          }
+  62   2        }
+  63   1      
+  64   1        software_reset();
+  65   1        
+  66   1      
+  67   1        printk("NVP6124 Count = %x\n", (unsigned short)nvp6124_cnt);
+  68   1        
+  69   1        //if(nvp6124_mode%2 == 0)
+  70   1          nvp6124_common_init();
+  71   1        //else
+  72   1          //nvp6124_pal_common_init();
+  73   1        for(i=0;i<nvp6124_cnt*4;i++)
+  74   1        {
+  75   2          vmode.vformat[0] = nvp6124_mode%2;
+  76   2          vmode.chmode[i] = NVP6124_VI_1080P_2530;  //默认设置为1080P模式.
+  77   2        }
+  78   1        if(chip_id[0] == NVP6124_R0_ID )
+  79   1          nvp6124_each_mode_setting(&vmode);
+  80   1        else if(chip_id[0] == NVP6114A_R0_ID )
+  81   1          nvp6114a_outport_2mux(nvp6124_mode%2, 0x00|NVP6124_VI_720P_2530, 0x10|NVP6124_VI_720P_2530);
+  82   1        nvp6124_datareverse();
+  83   1      }
+  84          #if 0
+              void nvp6114a_outport_1mux_chseq_mode(unsigned char vformat,unsigned char mode)
+              {
+                int i = 0; 
+                int ch = 0;
+                nvp6124_video_mode vmode;
+                unsigned char ch_seq[4]={2,1,0,3};
+                ch_seq[0] = 1;   // port A outputs channel0's video data
+                ch_seq[1] = 0;   // port B outputs channel1's video data
+                ch_seq[2] = 0xFF;
+                ch_seq[3] = 0xFF;
+                if(vformat%2 == 0)
+                  nvp6124_ntsc_common_init();
+                else
+                  nvp6124_pal_common_init();
+                for(ch=0;ch < 4;ch++)
+                  {
+                    vmode.vformat[i] = vformat;
+                  vmode.chmode[ch] = mode;
+                }
+                nvp6124_each_mode_setting(&vmode);
+                for(i=0;i<1;i++)
+                {
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01);
+                  //gpio_i2c_write(nvp6124_slave_addr[i], 0xC0, ch_seq[0]<<4|ch_seq[0]);
+                  //gpio_i2c_write(nvp6124_slave_addr[i], 0xC1, ch_seq[0]<<4|ch_seq[0]);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC2, ch_seq[0]<<4|ch_seq[0]);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC3, ch_seq[0]<<4|ch_seq[0]);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC4, ch_seq[1]<<4|ch_seq[1]);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC5, ch_seq[1]<<4|ch_seq[1]);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC6, ch_seq[1]<<4|ch_seq[1]);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC7, ch_seq[1]<<4|ch_seq[1]);
+C51 COMPILER V7.50   NVP6124_DRV                                                           06/16/2017 08:24:37 PAGE 3   
+
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC8, 0x00);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xC9, 0x00);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xCA, 0xFF);
+                }
+                printk("nvp6114a_outport_1mux_chseq_mode\n");
+              }
+              #endif
+ 123          /*
+ 124          chip:chip select[0,1,2,3];
+ 125          portsel: port select[0,1];
+ 126          portmode: port mode select[1mux,2mux,4mux]
+ 127          chid:  channel id, 1mux[0,1,2,3], 2mux[0,1], 4mux[0]
+ 128          NOTE: 
+ 129          portsel == 0,对应芯片硬件VDO1,寄存器描述VPORT_2;
+ 130          portsel == 1,对应芯片硬件VDO2,寄存器描述VPORT_1;
+ 131          */
+ 132          int nvp6124b_set_portmode(unsigned char chip, unsigned char portsel, unsigned char portmode, unsigned char
+             - chid)
+ 133          {
+ 134   1          unsigned char chipaddr = nvp6124_slave_addr[chip];
+ 135   1        unsigned char tmp=0, reg1=0, reg2=0;
+ 136   1        
+ 137   1          if(portsel>1)
+ 138   1        {
+ 139   2          printk("nvp6124b_set_portmode portsel[%d] error!!!\n", (int)portsel);
+ 140   2          return -1;
+ 141   2        }
+ 142   1        switch(portmode)
+ 143   1        {
+ 144   2          case NVP6124_OUTMODE_1MUX_SD:
+ 145   2            /*输出720H或者960H单通道,数据37.125MHz,时钟37.125MHz,单沿采样.*/
+ 146   2            gpio_i2c_write(chipaddr, 0xFF, 0x00);
+ 147   2            gpio_i2c_write(chipaddr, 0x56, 0x10);
+ 148   2            gpio_i2c_write(chipaddr, 0xFF, 0x01);
+ 149   2            gpio_i2c_write(chipaddr, 0x90+portsel, 0x03);
+ 150   2            gpio_i2c_write(chipaddr, 0x92+portsel, 0x03);
+ 151   2            gpio_i2c_write(chipaddr, 0xA0+chid, 0x00);
+ 152   2            gpio_i2c_write(chipaddr, 0xC0+portsel*2, (chid<<4)|chid);  
+ 153   2            tmp = gpio_i2c_read(chipaddr, 0xC8) & (portsel%2?0x0F:0xF0);
+ 154   2            gpio_i2c_write(chipaddr, 0xC8, tmp);
+ 155   2            gpio_i2c_write(chipaddr, 0xC8+portsel, 0x00);
+ 156   2            gpio_i2c_write(chipaddr, 0xCF-(portsel<<1), 0x86);      
+ 157   2          break;
+ 158   2          case NVP6124_OUTMODE_1MUX_HD:
+ 159   2            /*输出720P或者1280H或者1440H单通道,数据74.25MHz,时钟74.25MHz,单沿采样.*/
+ 160   2            gpio_i2c_write(chipaddr, 0xFF, 0x00);
+ 161   2            gpio_i2c_write(chipaddr, 0x56, 0x10);
+ 162   2            gpio_i2c_write(chipaddr, 0xFF, 0x01);
+ 163   2            gpio_i2c_write(chipaddr, 0x90+portsel, 0x01);
+ 164   2            gpio_i2c_write(chipaddr, 0x92+portsel, 0x01);
+ 165   2            gpio_i2c_write(chipaddr, 0xA0+chid, 0x00);
+ 166   2            gpio_i2c_write(chipaddr, 0xC0+portsel*2, (chid<<4)|chid);    
+ 167   2            tmp = gpio_i2c_read(chipaddr, 0xC8) & (portsel%2?0x0F:0xF0);
+ 168   2            gpio_i2c_write(chipaddr, 0xC8, tmp);
+ 169   2            gpio_i2c_write(chipaddr, 0xCF-(portsel<<1), 0x16);   
+ 170   2          break;
+ 171   2          case NVP6124_OUTMODE_1MUX_HD5060:
+ 172   2          case NVP6124_OUTMODE_1MUX_FHD:  
+ 173   2            /*输出720P@5060或者1080P单通道,数据148.5MHz,时钟148.5MHz,单沿采样.*/
+ 174   2            gpio_i2c_write(chipaddr, 0xFF, 0x00);
+ 175   2            gpio_i2c_write(chipaddr, 0x56, 0x10);
+ 176   2            gpio_i2c_write(chipaddr, 0xFF, 0x01);
+C51 COMPILER V7.50   NVP6124_DRV                                                           06/16/2017 08:24:37 PAGE 4   
+
+ 177   2            gpio_i2c_write(chipaddr, 0x90+portsel, 0x01);
+ 178   2            gpio_i2c_write(chipaddr, 0x92+portsel, 0x01);
+ 179   2            gpio_i2c_write(chipaddr, 0xA0+chid, 0x01);
+ 180   2            gpio_i2c_write(chipaddr, 0xC0+portsel*2, (chid<<4)|chid);    
+ 181   2            tmp = gpio_i2c_read(chipaddr, 0xC8) & (portsel%2?0x0F:0xF0);
+ 182   2            gpio_i2c_write(chipaddr, 0xC8, tmp);
+ 183   2            gpio_i2c_write(chipaddr, 0xCF-(portsel<<1), 0x43);
+ 184   2            break;
+ 185   2          default:
+ 186   2            printk("portmode %d not supported yet\n", (int)portmode);
+ 187   2            break;    
+ 188   2          }
+ 189   1        printk("nvp6124b_set_portmode portsel %d portmode %d setting\n", (int)portsel, (int)portmode);
+ 190   1        return 0;   
+ 191   1      }
+ 192          void nvp6114a_outport_1mux_chseq_mode(unsigned char vformat,unsigned char mode)
+ 193          {
+ 194   1        int i = 0; 
+ 195   1        int ch = 0;
+ 196   1        //unsigned char ch_seq[4]={2,1,0,3};
+ 197   1        int ret = 0;
+ 198   1        
+ 199   1        nvp6124_video_mode vmode;
+ 200   1      
+ 201   1        nvp6124_mode = vformat;
+ 202   1        nvp6124_difinition = mode;
+ 203   1          nvp6124_cnt = 0;
+ 204   1        //vmode = vformat;
+ 205   1        
+ 206   1        printk("NVP6124&NVP6114A Test Driver 2015.3.16\n");
+ 207   1      
+ 208   1        for(i=0;i<4;i++)
+ 209   1        {
+ 210   2          chip_id[i] = check_id(nvp6124_slave_addr[i]);
+ 211   2          if( (chip_id[i] != NVP6124_R0_ID ) && (chip_id[i] != NVP6114A_R0_ID) 
+ 212   2            && (chip_id[i] != NVP6124B_R0_ID ))
+ 213   2          {
+ 214   3            printk("nvp6124/6114a Device ID Error... %x\n",(unsigned short)chip_id[i]);
+ 215   3          }
+ 216   2          else
+ 217   2          {
+ 218   3            printk("nvp6124/6114a Device (0x%x) ID OK... %x\n", (unsigned short)nvp6124_slave_addr[i], (unsigned sh
+             -ort)chip_id[i]);
+ 219   3            nvp6124_cnt++;
+ 220   3          }
+ 221   2        }
+ 222   1        //software_reset();
+ 223   1        
+ 224   1        printk("NVP6124 Count = %x\n", (unsigned short)nvp6124_cnt);
+ 225   1        
+ 226   1        //if(vformat%2 == 0)
+ 227   1        nvp6124_common_init(); //init
+ 228   1        //else
+ 229   1          //nvp6124_pal_common_init();
+ 230   1        for(ch=0;ch < 4;ch++)
+ 231   1          {
+ 232   2            vmode.vformat[0] = nvp6124_mode%2;
+ 233   2          vmode.chmode[ch] = mode;
+ 234   2        }
+ 235   1        nvp6124_each_mode_setting(&vmode);
+ 236   1        for(i=0;i<1;i++)
+ 237   1        {
+C51 COMPILER V7.50   NVP6124_DRV                                                           06/16/2017 08:24:37 PAGE 5   
+
+ 238   2            nvp6124b_set_portmode(i, 0, mode-1, channel);
+ 239   2          nvp6124b_set_portmode(i, 1, mode-1, channel);
+ 240   2        }
+ 241   1        nvp6124_datareverse();//init
+ 242   1        printk("nvp6114a_outport_1mux_chseq_mode\n");
+ 243   1      }
+ 244          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1496    ----
+   CONSTANT SIZE    =    301    ----
+   XDATA SIZE       =     14      92
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

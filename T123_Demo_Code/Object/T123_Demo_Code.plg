@@ -1,0 +1,115 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Project:</h2>
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\T123_Demo_Code.uvproj
+Project File Date:  10/24/2016
+
+<h2>Output:</h2>
+Build target 'T123_Demo_Code'
+compiling panel.c...
+linking...
+Program Size: data=56.4 xdata=2611 const=104 code=56521
+creating hex file from ".\Object\T123_Demo_Code"...
+User command #1: .\Object\Hex2BinBatch_64_lx51.bat T123_Demo_Code 49152
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code>cd Object 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.bin del T123_Demo_Code.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code_tw.bin del T123_Demo_Code_tw.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>set /a current=0 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.Hex Hex2Bin.exe T123_Demo_Code.Hex 
+hex2bin v1.0.8, Copyright (C) 1998 Jacques Pelletier
+checksum extensions Copyright (C) 2004 Rockwell Automation
+improved P.G. 2007
+Lowest address  = 00000000
+Highest address = 0001D623
+Pad Byte        = FF
+8-bit Checksum = 5D
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.bin cnp_v1.3.exe -r T123_Demo_Code.bin T123_Demo_Code_tw.bin 49152 
+Pack T123_Demo_Code_tw.bin complete:
+file in: T123_Demo_Code.bin, size = 120356 bytes
+common area size = 49152 bytes
+bank area size = 16384 bytes
+file out: T123_Demo_Code_tw.bin, size = 81920 bytes
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST combine.bin del combine.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST patch.pch del patch.pch 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code_tw.bin combine_oj_v1.11.exe T123_Demo_Code_tw.bin t123_res.bin 
+Combine.exe v1.11
+Use internal DFU file.
+---------------------------------
+Backup: patch version: 0x004d   release version: v0.0
+Update: patch version: 0x004e   release version: v144.3
+---------------------------------
+Make combine.bin success.
+".\Object\T123_Demo_Code" - 0 Error(s), 0 Warning(s).
+Build target 'T123_Demo_Code'
+compiling c_root.c...
+compiling video.c...
+compiling videodetect.c...
+linking...
+Program Size: data=56.4 xdata=2611 const=104 code=56541
+creating hex file from ".\Object\T123_Demo_Code"...
+User command #1: .\Object\Hex2BinBatch_64_lx51.bat T123_Demo_Code 49152
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code>cd Object 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.bin del T123_Demo_Code.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code_tw.bin del T123_Demo_Code_tw.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>set /a current=0 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.Hex Hex2Bin.exe T123_Demo_Code.Hex 
+hex2bin v1.0.8, Copyright (C) 1998 Jacques Pelletier
+checksum extensions Copyright (C) 2004 Rockwell Automation
+improved P.G. 2007
+Lowest address  = 00000000
+Highest address = 0001D637
+Pad Byte        = FF
+8-bit Checksum = 58
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.bin cnp_v1.3.exe -r T123_Demo_Code.bin T123_Demo_Code_tw.bin 49152 
+Pack T123_Demo_Code_tw.bin complete:
+file in: T123_Demo_Code.bin, size = 120376 bytes
+common area size = 49152 bytes
+bank area size = 16384 bytes
+file out: T123_Demo_Code_tw.bin, size = 81920 bytes
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST combine.bin del combine.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST patch.pch del patch.pch 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code_tw.bin combine_oj_v1.11.exe T123_Demo_Code_tw.bin t123_res.bin 
+Combine.exe v1.11
+Use internal DFU file.
+---------------------------------
+Backup: patch version: 0x004d   release version: v0.0
+Update: patch version: 0x004e   release version: v144.3
+---------------------------------
+Make combine.bin success.
+".\Object\T123_Demo_Code" - 0 Error(s), 0 Warning(s).
+Build target 'T123_Demo_Code'
+linking...
+Program Size: data=56.4 xdata=2611 const=104 code=56541
+creating hex file from ".\Object\T123_Demo_Code"...
+User command #1: .\Object\Hex2BinBatch_64_lx51.bat T123_Demo_Code 49152
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code>cd Object 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.bin del T123_Demo_Code.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code_tw.bin del T123_Demo_Code_tw.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>set /a current=0 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.Hex Hex2Bin.exe T123_Demo_Code.Hex 
+hex2bin v1.0.8, Copyright (C) 1998 Jacques Pelletier
+checksum extensions Copyright (C) 2004 Rockwell Automation
+improved P.G. 2007
+Lowest address  = 00000000
+Highest address = 0001D637
+Pad Byte        = FF
+8-bit Checksum = 58
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code.bin cnp_v1.3.exe -r T123_Demo_Code.bin T123_Demo_Code_tw.bin 49152 
+Pack T123_Demo_Code_tw.bin complete:
+file in: T123_Demo_Code.bin, size = 120376 bytes
+common area size = 49152 bytes
+bank area size = 16384 bytes
+file out: T123_Demo_Code_tw.bin, size = 81920 bytes
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST combine.bin del combine.bin 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST patch.pch del patch.pch 
+E:\dpj\jysº—”¿ §\T123+NVP6124B_7''\T123_Demo_Code\Object>IF EXIST T123_Demo_Code_tw.bin combine_oj_v1.11.exe T123_Demo_Code_tw.bin t123_res.bin 
+Combine.exe v1.11
+Use internal DFU file.
+---------------------------------
+Backup: patch version: 0x004d   release version: v0.0
+Update: patch version: 0x004e   release version: v144.3
+---------------------------------
+Make combine.bin success.
+".\Object\T123_Demo_Code" - 0 Error(s), 0 Warning(s).

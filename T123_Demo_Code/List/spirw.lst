@@ -1,0 +1,1282 @@
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE SPIRW
+OBJECT MODULE PLACED IN .\Object\spirw.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\spirw.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\
+                    -sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\spirw.lst) TABS(2) OBJECT(.\Object\spirw.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   spirw.c
+   3           *  @brief  terawins SPI control function
+   4           *  $Id: spirw.c,v 1.25 2013/09/13 01:31:01 dos1236 Exp $
+   5           *  $Author: dos1236 $
+   6           *  $Revision: 1.25 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include <reg51.h>
+  15          #include "sys.h"
+  16          #include "reg_tw.h"
+  17          #include "iccontrol.h"
+  18          #include "spiosd.h"
+  19          #include "spirw.h"
+  20          #include "cq.h"
+  21          
+  22          #ifdef  RESOURCE_ON_NOR_FLASH
+              #include "tw_req_ser.h"
+              #endif
+  25          
+  26          //#define SPIRW_DEBUG_MODE
+  27          
+  28          unsigned char SPIRW_FLAG= 0;
+  29          /* Variable Flag */
+  30          #define SPI_QUAD_MODE   ((SPIRW_FLAG>>0)&0x01)
+  31          #define SET_SPI_QUAD_MODE do { SPIRW_FLAG |= 0x01; } while (0)
+  32          #define CLR_SPI_QUAD_MODE do { SPIRW_FLAG &= 0xFE; } while (0)
+  33          
+  34          #define SPI_HP_MODE_USE   ((SPIRW_FLAG>>1)&0x01)
+  35          #define SET_SPI_HP_MODE_USE do { SPIRW_FLAG |= 0x02; } while (0)
+  36          #define CLR_SPI_HP_MODE_USE do { SPIRW_FLAG &= 0xFD; } while (0)
+  37          
+  38          //static unsigned char spi_quad_mode = 0;
+  39          //static unsigned char spi_hp_mode_use = 0;     // high performance mode
+  40          /*
+  41           * 摘要 :void enable_quad_io(void)
+  42           *
+  43           * 描述 :开启Flash quad mode
+  44           *
+  45           * 参数 :无
+  46           *
+  47           * 回传值 :无
+  48           *
+  49           * 注意 : 无
+  50          */
+  51          bit enable_quad_io(void)
+  52          {
+  53   1        bit rc = 1;
+  54   1      
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 2   
+
+  55   1      #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                  unsigned char reg=0;
+                unsigned char reg1=0;
+                unsigned char count=0;
+                INFO(("WIN_QUAD_NOR \r\n"));
+                #if (defined(WIN_PROTECT_STATUS))
+                  spi_wrsr(BLOCK_PROTECT,QUAD_PROTECT_GD128);             // flash quad enable
+                #else
+                  spi_wrsr(BLOCK_PROTECT,QUAD_ENABLE_WIN);
+                #endif
+                for(count=0; count<255; count++) {
+                  spi_rdsr_WQ(&reg,&reg1);
+                  if(!(reg&0x01))
+                    break;
+                }
+              
+                INFO(("WQ_QUAD_NOR r1=%bx r2=%bx\r\n",reg,reg1));
+              
+                if(!(reg1&0x02)) {
+                  ERROR(("quad enable error! \r\n"));
+                  while(1);
+                }
+                if(reg!=0x3c) {
+                  //ERROR(("Protect enable error! \r\n"));
+                  rc = 0;
+                }
+                #if (defined(WIN_PROTECT_STATUS))
+                if(!(reg1&0x01)) {
+                  //ERROR(("GD 128M SPR1 error! \r\n"));
+                  rc = 0;
+                }
+                #endif
+              
+              #elif (defined(GD_128M_QUAD_NOR)||defined(WQ_25Q_128_QUAD_NOR))
+                unsigned char reg=0;
+                unsigned char reg1=0;
+                unsigned char reg2=0;
+                unsigned char count=0;
+                INFO(("GD_128M_QUAD_NOR \r\n"));
+                spi_wrsr(BLOCK_PROTECT,WS_REG0_GD128M);        // flash quad enable
+                spi_wrsr(QUAD_ENABLE_GD128,WS_REG1_GD128M);        // flash quad enable
+                spi_wrsr(QUAD_STATUS_3_GD128,WS_REG2_GD128M);        // flash quad enable
+              #if (defined(GD_128M_STATUS_PROTECT)||defined(WQ_128M_STATUS_PROTECT))
+                spi_wrsr(QUAD_PROTECT_GD128,WS_REG1_GD128M);
+              #endif
+                for(count=0; count<255; count++) {
+                spi_rdsr_GD(&reg,&reg1,&reg2);
+                  
+                if(!(reg&0x01))
+                  break;
+                }
+              
+                INFO(("GD_128M_QUAD_NOR r1=%bx r2=%bx r3=%bx\r\n",reg,reg1,reg2));
+              
+                if(!(reg1&0x02)) {
+                  ERROR(("GD 128M quad enable error! \r\n"));
+                  while(1);
+                }
+              
+                if((reg&0x3c)!=0x3c) {
+                  //ERROR(("GD 128M Block protect error! \r\n"));
+                  rc = 0;
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 3   
+
+                }
+                if(reg1&0x40) {
+                  //ERROR(("GD 128M CMP disable error! \r\n"));
+                  rc = 0;
+                }
+                if(reg2&0x04) {
+                  //ERROR(("GD 128M WPS disable error! \r\n"));
+                  rc = 0;
+                }
+                #if (defined(GD_128M_STATUS_PROTECT)||defined(WQ_128M_STATUS_PROTECT))
+                if(!(reg1&0x01)) {
+                  //ERROR(("GD 128M SPR1 error! \r\n"));
+                  rc = 0;
+                }
+                #endif
+              
+              #else
+ 134   1          unsigned char reg=0;
+ 135   1        unsigned char count=0;
+ 136   1        INFO(("MXIC_QUAD_NOR \r\n"));
+ 137   1        spi_wrsr(0x7c,0X00);             // flash quad enable
+ 138   1        for(count=0; count<255; count++) {
+ 139   2          spi_rdsr(&reg);
+ 140   2          if(!(reg&0x01))
+ 141   2            break;
+ 142   2        }
+ 143   1        if(!(reg&0x40)) {
+ 144   2          ERROR(("quad enable error! \r\n"));
+ 145   2          while(1);
+ 146   2        }
+ 147   1        if(reg!=0x3c) {
+ 148   2          //ERROR(("Protect enable error! \r\n"));
+ 149   2          rc = 0;
+ 150   2        }
+ 151   1      #endif
+ 152   1        spi_quad_mode_enable();             // 4x_8051, 4x_dma
+ 153   1        return rc;
+ 154   1      //  spiosd_quad_mode_enable();          // 4x_sosd
+ 155   1      }
+ 156          /*
+ 157           * 摘要 :void spi_toggle_byte_set(void)
+ 158           *
+ 159           * 描述 :设定Flash toggle byte
+ 160           *
+ 161           * 参数 :无
+ 162           *
+ 163           * 回传值 :无
+ 164           *
+ 165           * 注意 : 无
+ 166          */
+ 167          void spi_toggle_byte_set(void)
+ 168          {   
+ 169   1          IC_WritByte(TWIC_P6, SPI_WR_DATA_REG, NONE_TOGGLE_VALUE);
+ 170   1          IC_WritByte(TWIC_P6, SPI_TOGGLE_WR_DATA, HPM_TOGGLE_VALUE);
+ 171   1      }
+ 172          /*
+ 173           * 摘要 :void ospi_toggle_byte_set(void)
+ 174           *
+ 175           * 描述 :设定OFlash toggle byte
+ 176           *
+ 177           * 参数 :无
+ 178           *
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 4   
+
+ 179           * 回传值 :无
+ 180           *
+ 181           * 注意 : 无
+ 182          */
+ 183          void ospi_toggle_byte_set(void)
+ 184          {
+ 185   1          IC_WritByte(TWIC_P6, OSPI_WR_DATA_REG, NONE_TOGGLE_VALUE);
+ 186   1          IC_WritByte(TWIC_P6, OSPI_TOGGLE_WR_DATA, HPM_TOGGLE_VALUE);
+ 187   1      }
+ 188          /*
+ 189           * 摘要 :void spi_quad_mode_enable(void)
+ 190           *
+ 191           * 描述 :设定SPI QUAD MODE 使能
+ 192           *
+ 193           * 参数 :无
+ 194           *
+ 195           * 回传值 :无
+ 196           *
+ 197           * 注意 : 无
+ 198          */
+ 199          void spi_quad_mode_enable(void)
+ 200          {
+ 201   1          SET_SPI_QUAD_MODE;
+ 202   1          IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG, SPI_4X_I8051 | SPI_4X_DMA);
+ 203   1      }
+ 204          /*
+ 205           * 摘要 :void spi_quad_mode_disable(void)
+ 206           *
+ 207           * 描述 :设定SPI QUAD MODE 关闭
+ 208           *
+ 209           * 参数 :无
+ 210           *
+ 211           * 回传值 :无
+ 212           *
+ 213           * 注意 : 无
+ 214          */
+ 215          void spi_quad_mode_disable(void)
+ 216          {
+ 217   1          CLR_SPI_QUAD_MODE;
+ 218   1          IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG, 0);    
+ 219   1      }
+ 220          /*
+ 221           * 摘要 :void dma_int_enable()
+ 222           *
+ 223           * 描述 :设定DMA中断开启
+ 224           *
+ 225           * 参数 :无
+ 226           *
+ 227           * 回传值 :无
+ 228           *
+ 229           * 注意 : 无
+ 230          */
+ 231          void dma_int_enable()
+ 232          {
+ 233   1          IC_WritByte(TWIC_P6, 0x14, (IC_ReadByte(TWIC_P6, 0x14) & 0xbf));
+ 234   1      }
+ 235          /*
+ 236           * 摘要 :void dma_int_disable()
+ 237           *
+ 238           * 描述 :设定DMA中断关闭
+ 239           *
+ 240           * 参数 :无
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 5   
+
+ 241           *
+ 242           * 回传值 :无
+ 243           *
+ 244           * 注意 : 无
+ 245          */
+ 246          void dma_int_disable()
+ 247          {
+ 248   1          IC_WritByte(TWIC_P6, 0x14, (IC_ReadByte(TWIC_P6, 0x14) | 0x40));
+ 249   1      }
+ 250          /*
+ 251           * 摘要 :bit wait_dma_int(void)
+ 252           *
+ 253           * 描述 :等待DMA中断完成
+ 254           *
+ 255           * 参数 :无
+ 256           *
+ 257           * 回传值 : 0 = 失败 1= 成功
+ 258           *
+ 259           * 注意 : 无
+ 260          */
+ 261          // wait dma done, check interrupt
+ 262          bit wait_dma_int(void)
+ 263          {
+ 264   1          unsigned short i;
+ 265   1          for(i = 0; i < 65535; i++){
+ 266   2              if((IC_ReadByte(TWIC_P6, 0x12) & 0x40)){
+ 267   3                  IC_WritByte(TWIC_P6, 0x12, (IC_ReadByte(TWIC_P6, 0x12) | 0x40) );
+ 268   3                  return 1;
+ 269   3              }
+ 270   2              else
+ 271   2                  twdDelay(3);
+ 272   2          }
+ 273   1          DBG_PRINT("Wait DMA Interrupt Timeout\r\n");
+ 274   1          return 0;
+ 275   1      }
+ 276          /*
+ 277           * 摘要 :bit wait_dma(void)
+ 278           *
+ 279           * 描述 :等待DMA完成
+ 280           *
+ 281           * 参数 :无
+ 282           *
+ 283           * 回传值 : 0 = 失败 1= 成功
+ 284           *
+ 285           * 注意 : 无
+ 286          */
+ 287          /* SPI: Wait DMA done => 1 */
+ 288          bit wait_dma(void)
+ 289          {
+ 290   1        unsigned short count=0;
+ 291   1        for(count=0; count<65535; count++) {
+ 292   2          if((IC_ReadByte(TWIC_P6, SPI_DMA_CTRL_REG)&SPI_DMA_GO))
+ 293   2            return 1;
+ 294   2          else
+ 295   2            twdDelay(3);
+ 296   2        }
+ 297   1          DBG_PRINT("Wait DMA Timeout\r\n");
+ 298   1        return 0;
+ 299   1      }
+ 300          /*
+ 301           * 摘要 :bit spi_dma2xram(unsigned long address, unsigned short xaddr, unsigned short length)
+ 302           *
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 6   
+
+ 303           * 描述 :从FLASH透过DMA到XRAM
+ 304           *
+ 305           * 参数 :unsigned long address  =>FLASH位置
+ 306           *       unsigned short xaddr   =>XRAM位置
+ 307           *       unsigned short length  =>搬运资料大小
+ 308           *
+ 309           * 回传值 : 0 = 失败 1= 成功
+ 310           *
+ 311           * 注意 : 无
+ 312          */
+ 313          bit spi_dma2xram(unsigned long address, unsigned short xaddr, unsigned short length)
+ 314          {
+ 315   1          bit rc = 0;
+ 316   1          
+ 317   1      #ifdef SPIRW_DEBUG_MODE
+                dbg(2, ("spi_dma2xram address= 0x%lX, xaddr= 0x%X, length= %u\r\n", address, xaddr, length));
+              #endif
+ 320   1        
+ 321   1        if(SPI_QUAD_MODE)
+ 322   1          {
+ 323   2              IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG, SPI_4X_I8051 | SPI_4X_DMA);
+ 324   2              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);
+ 325   2            IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_DMA_4X);
+ 326   2      
+ 327   2          }
+ 328   1          else
+ 329   1          {
+ 330   2              IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG, 0);
+ 331   2              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ);
+ 332   2            IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_DMA);
+ 333   2          }
+ 334   1      
+ 335   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, (address&0x000000FF));   // AL
+ 336   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, ((address>>8)&0x000000FF));  // AM
+ 337   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, ((address>>16)&0x000000FF)); // AH
+ 338   1      
+ 339   1          spi_toggle_byte_set();
+ 340   1          
+ 341   1        IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG1, xaddr&0x00FF);        // External RAM address
+ 342   1        IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG2, (xaddr>>8)&0x00FF);     // External RAM address
+ 343   1        IC_WritByte(TWIC_P6, SPI_DMA_COUNT_REG1, length&0x00FF);      // DMA count
+ 344   1        IC_WritByte(TWIC_P6, SPI_DMA_CTRL_REG, DMA_READ|((length&SPI_DMA_COUNT_BIT)>>8)); // DMA go
+ 345   1        
+ 346   1          if((IC_ReadByte(TWIC_P6, 0x14) & 0x40))// dma interrupt mask
+ 347   1          {
+ 348   2              if(!wait_dma())
+ 349   2              goto EXIT;
+ 350   2          }
+ 351   1          else// dma interrupt unmask
+ 352   1          {
+ 353   2              if(!wait_dma_int())
+ 354   2              goto EXIT;
+ 355   2          }
+ 356   1        rc = 1;
+ 357   1      EXIT:    
+ 358   1          if(SPI_HP_MODE_USE)
+ 359   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);
+ 360   1        return rc;
+ 361   1      }
+ 362          /*
+ 363           * 摘要 :bit spi_dma2oram(unsigned long base_address, unsigned short oram_address, unsigned int length)
+ 364           *
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 7   
+
+ 365           * 描述 :从FLASH透过DMA到ORAM
+ 366           *
+ 367           * 参数 :unsigned long address  =>FLASH位置
+ 368           *       unsigned short xaddr   =>XRAM位置
+ 369           *       unsigned short length  =>搬运资料大小
+ 370           *
+ 371           * 回传值 : 0 = 失败 1= 成功
+ 372           *
+ 373           * 注意 : 无
+ 374          */
+ 375          #define EX_MCU_DMA_DELAY_VALUE  100
+ 376          bit spi_dma2oram(unsigned long base_address, unsigned short oram_address, unsigned int length)
+ 377          {
+ 378   1          bit rc = 0;
+ 379   1      #if (defined(EX_I2C_SAFE_MODE)&&(!defined(ENABLE_EX_MCU)))
+ 380   1        unsigned char curr_addr= IC_ReadByte(TWIC_P0, 0xF0);
+ 381   1        IC_WritByte(TWIC_P0, 0xF0, SLAVE_SAFE_ADDR);
+ 382   1      #endif
+ 383   1          // Notice: OSDRam address is Word Unit
+ 384   1          //            Flash Address is Byte Unit, blit length is also Byte Unit 
+ 385   1        /* word access, LSB first, then MSB byte */ 
+ 386   1        IC_WritByte(TWIC_P0, 0xAA, (unsigned char)(oram_address & 0xff));
+ 387   1        IC_WritByte(TWIC_P0, 0xAA, (unsigned char)(oram_address>>8));
+ 388   1      
+ 389   1          if(SPI_QUAD_MODE)
+ 390   1          {
+ 391   2              IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG, SPI_4X_I8051 | SPI_4X_DMA);
+ 392   2              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);
+ 393   2              IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_DMA_4X);
+ 394   2          }
+ 395   1          else
+ 396   1          {
+ 397   2              IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG, 0);
+ 398   2              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ);
+ 399   2              IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_DMA);
+ 400   2          }
+ 401   1          
+ 402   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, (base_address&0x000000FF));        // AL
+ 403   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, ((base_address>>8)&0x000000FF)); // AM
+ 404   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, ((base_address>>16)&0x000000FF));  // AH
+ 405   1      
+ 406   1          spi_toggle_byte_set();
+ 407   1          
+ 408   1        IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG1, OSDRAM_DATA_PORT&0x00FF);     // OSDRam Dataport
+ 409   1        IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG2, (OSDRAM_DATA_PORT>>8)&0x00FF);  // OSDRam Dataport
+ 410   1        IC_WritByte(TWIC_P6, SPI_DMA_COUNT_REG1, length & 0x00FF);        // DMA count;
+ 411   1      
+ 412   1      #ifndef ENABLE_EX_MCU
+ 413   1        IC_WritByte(TWIC_P6, SPI_DMA_COUNT_REG2, DMA_READ|((length & SPI_DMA_COUNT_BIT)>>8)); // DMA go;
+ 414   1          
+ 415   1        // Notice: FPGA Sample Code check P6_12[6], and need write 1 clear
+ 416   1          if((IC_ReadByte(TWIC_P6, 0x14) & 0x40))// dma interrupt mask
+ 417   1          {
+ 418   2              if(!wait_dma())
+ 419   2              goto EXIT;
+ 420   2          }
+ 421   1          else// dma interrupt unmask
+ 422   1          {
+ 423   2              if(!wait_dma_int())
+ 424   2              goto EXIT;
+ 425   2          }
+ 426   1      #ifdef EX_I2C_SAFE_MODE
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 8   
+
+ 427   1        if(curr_addr==SLAVE_WORK_ADDR)
+ 428   1          IC_WritByte(TWIC_P0, 0xF0, SLAVE_WORK_ADDR);
+ 429   1      #endif
+ 430   1          rc = 1; 
+ 431   1      EXIT:    
+ 432   1          if(SPI_HP_MODE_USE)
+ 433   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);  
+ 434   1        return rc;
+ 435   1      #else
+                #ifdef RESOURCE_ON_NOR_FLASH
+                IC_WritByte(TWIC_P6, SPI_DMA_COUNT_REG2, /*DMA_READ|*/((length & SPI_DMA_COUNT_BIT)>>8)); // DMA go;  
+                rc = req_ser_dma_go();
+                if(SPI_HP_MODE_USE)
+                      IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);
+                #endif
+                return rc;
+              
+              #endif
+ 445   1      }
+ 446          /*
+ 447           * 摘要 :static bit wait_cmd(void)
+ 448           *
+ 449           * 描述 :SPI等待COMMAND ISSUE完成
+ 450           *
+ 451           * 参数 :无
+ 452           *
+ 453           * 回传值 : 0 = 失败 1= 成功
+ 454           *
+ 455           * 注意 : 无
+ 456          */
+ 457          /* SPI: Wait command issue => 0 */
+ 458          static bit wait_cmd(void)
+ 459          {
+ 460   1        unsigned char count=0;
+ 461   1        for(count=0; count<255; count++) {
+ 462   2          if(!(IC_ReadByte(TWIC_P6, SPI_COMMAND_REG)&SPI_ISSUE_CMD))
+ 463   2            return 1;
+ 464   2          else
+ 465   2            twdDelay(3);
+ 466   2        }
+ 467   1        return 0;
+ 468   1      }
+ 469          /*
+ 470           * 摘要 :static bit wait_wip(void)
+ 471           *
+ 472           * 描述 :SPI等待WIP(Write in progress)状态是否结束
+ 473           *
+ 474           * 参数 :无
+ 475           *
+ 476           * 回传值 : 0 = 失败 1= 成功
+ 477           *
+ 478           * 注意 : 无
+ 479          */
+ 480          /* SPI: Wait WIP => 1 */
+ 481          static bit wait_wip(void)
+ 482          {
+ 483   1        unsigned char count=0;
+ 484   1        for(count=0; count<255; count++) {
+ 485   2          if((IC_ReadByte(TWIC_P6, SPI_COMMAND_REG)&SPI_CHECK_WIP))
+ 486   2            return 1;
+ 487   2          else
+ 488   2            twdDelay(3);
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 9   
+
+ 489   2        }
+ 490   1        return 0;
+ 491   1      }
+ 492          /*
+ 493           * 摘要 :bit spi_wren(void)
+ 494           *
+ 495           * 描述 :对FLASH下达WREN命令,允许FLASH改变状态
+ 496           *
+ 497           * 参数 :无
+ 498           *
+ 499           * 回传值 : 0 = 失败 1= 成功
+ 500           *
+ 501           * 注意 : 无
+ 502          */
+ 503          /* write enable command */
+ 504          bit spi_wren(void)
+ 505          {
+ 506   1          bit rc = 0;
+ 507   1        IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, WRITE_ENABLE);  // WREN command
+ 508   1        if(!wait_wip())
+ 509   1          goto EXIT;
+ 510   1        IC_WritByte(TWIC_P6, SPI_COMMAND_REG, WRITE_INSTRUCTION); // Control 
+ 511   1        rc = 1;
+ 512   1          
+ 513   1      EXIT:
+ 514   1          if(SPI_HP_MODE_USE)
+ 515   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+ 516   1          return rc;
+ 517   1      }
+ 518          /*
+ 519           * 摘要 :bit spi_wrsr(unsigned char reg1, unsigned char reg2)
+ 520           *
+ 521           * 描述 :改变Flash状态,可以读取rdsr确认状态值
+ 522           *
+ 523           * 参数 :unsigned char reg1  =>暂存器一
+ 524           *       unsigned char reg2  =>暂存器二
+ 525           *
+ 526           * 回传值 : 0 = 失败 1= 成功
+ 527           *
+ 528           * 注意 : mxic是一个byte winbond是两个byte 
+ 529          */
+ 530          /* write status register command */
+ 531          bit spi_wrsr(unsigned char reg1, unsigned char reg2)
+ 532          {
+ 533   1          bit rc = 0;
+ 534   1        if(!spi_wren())
+ 535   1              goto EXIT; 
+ 536   1          
+ 537   1      #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                  IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, WS_REG);      // WRSR command
+                  IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, reg2);            // register value
+                  IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, reg1);              // register value
+                  IC_WritByte(TWIC_P6, SPI_COMMAND_REG, WRITE_RSR_WIN);   // Control
+              #elif (defined(GD_128M_QUAD_NOR)||defined(WQ_25Q_128_QUAD_NOR))    //gd128M
+                IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, reg2);    // WRSR command
+                IC_WritByte(TWIC_P6, SPI_WR_DATA_REG, reg1);      // register value
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, WRITE_RSR);   // Control
+              #else
+ 547   1        reg2=0x00;
+ 548   1          IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, WS_REG);      // WRSR command
+ 549   1        IC_WritByte(TWIC_P6, SPI_WR_DATA_REG, reg1);          // register value
+ 550   1        IC_WritByte(TWIC_P6, SPI_COMMAND_REG, WRITE_RSR);     // Control
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 10  
+
+ 551   1      #endif
+ 552   1      
+ 553   1        if(!wait_wip())
+ 554   1              goto EXIT; 
+ 555   1      
+ 556   1          rc = 1;
+ 557   1       EXIT:
+ 558   1          if(SPI_HP_MODE_USE)
+ 559   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+ 560   1              
+ 561   1          spi_toggle_byte_set();
+ 562   1          return rc;
+ 563   1      }
+ 564          /*
+ 565           * 摘要 :bit spi_rdsr(unsigned char* states)
+ 566           *
+ 567           * 描述 :读取flash内状态值
+ 568           *
+ 569           * 参数 :unsigned char* states =>得到的值会写入这个指标
+ 570           *
+ 571           * 回传值 : 0 = 失败 1= 成功
+ 572           *
+ 573           * 注意 : 无
+ 574          */
+ 575          /* read status register command */
+ 576          bit spi_rdsr(unsigned char* states)
+ 577          {
+ 578   1          bit rc = 0;
+ 579   1      #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                  IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG_WIN); // RDSR command
+              #else
+ 582   1          IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG); // RDSR command
+ 583   1      #endif
+ 584   1      
+ 585   1        IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_RSR);  // Control
+ 586   1        if(!wait_cmd())
+ 587   1          goto EXIT;
+ 588   1        *states = IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1);  // register value
+ 589   1          rc = 1; 
+ 590   1        EXIT:
+ 591   1          if(SPI_HP_MODE_USE)
+ 592   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+ 593   1          return rc;    
+ 594   1      }
+ 595          
+ 596          #if (defined(GD_128M_QUAD_NOR)||defined(WQ_25Q_128_QUAD_NOR))
+              bit spi_rdsr_GD(unsigned char* states,unsigned char* states1,unsigned char* states2)
+              {
+                  bit rc = 0;
+                //step 1
+                  IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG0_GD); // RDSR command
+              
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_RSR);  // Control
+                if(!wait_cmd())
+                  goto EXIT;
+                *states = IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1);  // register value0
+                //step 2
+                  IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG1_GD); // RDSR command
+              
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_RSR);  // Control
+                if(!wait_cmd())
+                  goto EXIT;
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 11  
+
+                *states1 = IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1); // register value1
+                //step 3
+                IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG2_GD); // RDSR command
+              
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_RSR);  // Control
+                if(!wait_cmd())
+                  goto EXIT;
+                *states2 = IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1); // register value1
+              
+                
+                  rc = 1; 
+                EXIT:
+                  if(SPI_HP_MODE_USE)
+                      IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+                  return rc;    
+              }
+              #endif
+ 630          #if (defined(WIN_QUAD_NOR)||defined(AMIC_QUAD_NOR))
+              bit spi_rdsr_WQ(unsigned char* states,unsigned char* states1)
+              {
+                  bit rc = 0;
+                //step 1
+                  IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG0_GD); // RDSR command
+              
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_RSR);  // Control
+                if(!wait_cmd())
+                  goto EXIT;
+                *states = IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1);  // register value0
+                //step 2
+                  IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, RS_REG1_GD); // RDSR command
+              
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_RSR);  // Control
+                if(!wait_cmd())
+                  goto EXIT;
+                *states1 = IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1); // register value1
+                  rc = 1; 
+                EXIT:
+                  if(SPI_HP_MODE_USE)
+                      IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+                  return rc;    
+              }
+              #endif
+ 655          /*
+ 656           * 摘要 :void spi_check_shadow(void)
+ 657           *
+ 658           * 描述 :检查shadow状态,并且等到vsync blank跳出
+ 659           *
+ 660           * 参数 :无
+ 661           *
+ 662           * 回传值 : 无
+ 663           *
+ 664           * 注意 : 无
+ 665          */
+ 666          void spi_check_shadow(void)
+ 667          {
+ 668   1      
+ 669   1        IC_WritByte(TWIC_P0,SHADOW_CTRL_CONF_REG,SHADOW_CTRL_CONF);
+ 670   1        while(IC_ReadByte(TWIC_P0,SHADOW_CTRL_CONF_REG)&SHADOW_BUSY)
+ 671   1          continue;
+ 672   1        /* v blanking star */
+ 673   1      }
+ 674          /*
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 12  
+
+ 675           * 摘要 :bit spi_dma_write(unsigned long address, unsigned short xaddr, unsigned short length)
+ 676           *
+ 677           * 描述 :从xram将资要写到FLASH内
+ 678           *
+ 679           * 参数 :unsigned long address  =>FLASH位置
+ 680           *       unsigned short xaddr   =>XRAM位置
+ 681           *       unsigned short length  =>搬运资料大小
+ 682           *
+ 683           * 回传值 : 0 = 失败 1= 成功
+ 684           *
+ 685           * 注意 : 无
+ 686          */
+ 687          /* --- Program SPI Flash ROM via DMA moving from XDATA (0x0000~0x0400) --- */
+ 688          bit spi_dma_write(unsigned long address, unsigned short xaddr, unsigned short length)
+ 689          {
+ 690   1          bit rc = 0;
+ 691   1          char    i;
+ 692   1          unsigned short   remain;
+ 693   1          unsigned short   len[2] = {0};
+ 694   1          unsigned long    addr;
+ 695   1          unsigned short   src;
+ 696   1          
+ 697   1          if(length > 256)
+ 698   1          {
+ 699   2            ERROR(("spi_dma_write length > 256 bytes\r\n"));
+ 700   2              goto EXIT;
+ 701   2          }
+ 702   1      
+ 703   1          remain = (unsigned short)(256 - (address % 256));
+ 704   1          addr = address;
+ 705   1          src  = xaddr;
+ 706   1          len[0] = length;
+ 707   1          len[1] = 0;
+ 708   1          
+ 709   1          if(remain < length)
+ 710   1          {
+ 711   2              len[0] = remain;
+ 712   2              len[1] = length - remain;
+ 713   2          }
+ 714   1          
+ 715   1      
+ 716   1          for(i = 0; i < 2; i++)
+ 717   1          {
+ 718   2              if(i == 1)
+ 719   2              {
+ 720   3                  if(len[1] == 0)
+ 721   3                      break;
+ 722   3                  addr = address + remain;
+ 723   3                  src += len[0];
+ 724   3              }
+ 725   2              
+ 726   2            if(!spi_wren())
+ 727   2              goto EXIT;
+ 728   2      #if 1
+ 729   2          spi_check_shadow(); 
+ 730   2          IC_WritByte(TWIC_P0,0xE2,0x00);     
+ 731   2            IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, PAGE_PROGRAM);      // PP command
+ 732   2            IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, (addr&0x000000FF));    // AL
+ 733   2            IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, ((addr>>8)&0x000000FF)); // AM
+ 734   2            IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, ((addr>>16)&0x000000FF));  // AH
+ 735   2            IC_WritByte(TWIC_P6, SPI_COMMAND_REG, WRITE_DMA);         // Control w/ Check WIP
+ 736   2            IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG1, src&0x00FF);        // External RAM address
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 13  
+
+ 737   2            IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG2, (src>>8)&0x00FF);     // External RAM address
+ 738   2            IC_WritByte(TWIC_P6, SPI_DMA_COUNT_REG1, len[i]&0x00FF);        // DMA count
+ 739   2      #endif
+ 740   2      #if 0   
+                    cq_write_byte(TWIC_P6, SPI_INSTRUCTION_REG, PAGE_PROGRAM);      // PP command
+                    cq_write_byte(TWIC_P6, SPI_ADDRESS_REG1, (addr&0x000000FF));    // AL
+                    cq_write_byte(TWIC_P6, SPI_ADDRESS_REG2, ((addr>>8)&0x000000FF)); // AM
+                    cq_write_byte(TWIC_P6, SPI_ADDRESS_REG3, ((addr>>16)&0x000000FF));  // AH
+                    cq_write_byte(TWIC_P6, SPI_COMMAND_REG, WRITE_DMA);         // Control w/ Check WIP
+                    cq_write_byte(TWIC_P6, SPI_DMA_ADDR_REG1, src&0x00FF);        // External RAM address
+                    cq_write_byte(TWIC_P6, SPI_DMA_ADDR_REG2, (src>>8)&0x00FF);     // External RAM address
+                    cq_write_byte(TWIC_P6, SPI_DMA_COUNT_REG1, len[i]&0x00FF);        // DMA count
+                  cq_flush_vde();
+              #endif
+ 751   2          IC_WritByte(TWIC_P6, SPI_DMA_CTRL_REG, DMA_WRITE|((len[i]&SPI_DMA_COUNT_BIT)>>8));  // DMA go
+ 752   2      
+ 753   2              if(!wait_wip())
+ 754   2              { 
+ 755   3                  DBG_PRINT("spi_dma_write wip fail\r\n");
+ 756   3                  goto EXIT;
+ 757   3              }
+ 758   2          }
+ 759   1      
+ 760   1          rc = 1;
+ 761   1      EXIT:
+ 762   1          if(SPI_HP_MODE_USE)
+ 763   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);  
+ 764   1        return rc;
+ 765   1      }
+ 766          /*
+ 767           * 摘要 :unsigned char spi_read_byte(unsigned long address)
+ 768           *
+ 769           * 描述 :从FLASH读取一个BYTE
+ 770           *
+ 771           * 参数 :unsigned long address  =>FLASH位置
+ 772           *
+ 773           * 回传值 : 回传读回的资料
+ 774           *
+ 775           * 注意 : 无
+ 776          */
+ 777          #define SPI_RD_BACK_DATA_REG_MAP  0xF600|SPI_RD_BACK_DATA_REG1
+ 778          unsigned char spi_read_byte(unsigned long address)
+ 779          {
+ 780   1      #if 0
+                /* NOR FLASH READ BYTE COMMAND */
+                IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, READ_DATA);
+                
+                /* NOR FLASH ADDRESS */
+                IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, address&0xFF);
+                IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, (address>>8)&0xFF);
+                IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, (address>>16)&0xFF);
+                
+                /* SPI READ BYTE COMMAND */
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_BYTE);
+                
+                //if(!wait_cmd())
+                //  return 0;
+              
+               
+                  if(SPI_HP_MODE_USE)
+                      IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+                return IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1);
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 14  
+
+              #else
+ 800   1          #ifndef ENABLE_EX_MCU
+ 801   1              unsigned char read;
+ 802   1              spi_dma2xram(address, (unsigned short) &read, 1);
+ 803   1              return read;
+ 804   1          #else
+                      spi_dma2xram(address, SPI_RD_BACK_DATA_REG_MAP, 1);
+                      return IC_ReadByte(TWIC_P6, SPI_RD_BACK_DATA_REG1);
+                  #endif
+ 808   1      #endif
+ 809   1      }
+ 810          /*
+ 811           * 摘要 :bit spi_write_byte(unsigned long address, unsigned char value)
+ 812           *
+ 813           * 描述 :从FLASH写入一个BYTE
+ 814           *
+ 815           * 参数 :unsigned long address  =>FLASH位置
+ 816           *       unsigned char value    =>欲写入的值
+ 817           *
+ 818           * 回传值 : 0 = 失败 1= 成功
+ 819           *
+ 820           * 注意 : 无
+ 821          */
+ 822          bit spi_write_byte(unsigned long address, unsigned char value)
+ 823          { 
+ 824   1      #if 0
+                  bit rc = 0;
+                /* WRSR */
+              #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                  spi_wrsr(NO_PROTECT | QUAD_ENABLE_WIN);
+              #else
+                  spi_wrsr(NO_PROTECT | QUAD_ENABLE);
+              #endif
+              
+                /* SPI PRE WREN */
+                //IC_WritByte(TWIC_P1, SPI_4X_ENABLE_REG, IC_ReadByte(TWIC_P1,SPI_4X_ENABLE_REG)|SPI_PRE_WREN);
+                  
+                if(!spi_wren())
+                      goto EXIT;
+              
+                /* PP */
+                IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, PAGE_PROGRAM);
+              
+                /* NOR FLASH ADDRESS */
+                IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, address&0xFF);
+                IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, (address>>8)&0xFF);
+                IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, (address>>16)&0xFF);
+              
+                /* WRITE DATA */
+                IC_WritByte(TWIC_P6, SPI_WR_DATA_REG, value);
+              
+                /* SPI SECTOR ERASE COMMAND */
+                IC_WritByte(TWIC_P6, SPI_COMMAND_REG, WRITE_BYTE);
+              
+                if(!wait_cmd())
+                       goto EXIT;
+                  
+                  rc = 1;
+              EXIT:
+                  if(SPI_HP_MODE_USE)
+                      IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+                  spi_toggle_byte_set();
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 15  
+
+               
+                return rc;
+              #else
+ 864   1          return spi_dma_write(address, (unsigned short)&value, 1);
+ 865   1      #endif
+ 866   1      }
+ 867          /*
+ 868           * 摘要 :void spi_hp_mode_using(void)
+ 869           *
+ 870           * 描述 :SPI HIGH PERFORMANCE MODE使用
+ 871           *
+ 872           * 参数 :无
+ 873           *
+ 874           * 回传值 : 无
+ 875           *
+ 876           * 注意 : 无
+ 877          */
+ 878          void spi_hp_mode_using(void)
+ 879          {
+ 880   1          SET_SPI_HP_MODE_USE;
+ 881   1      }
+ 882          /*
+ 883           * 摘要 :void spi_hp_mode_stop_using(void)
+ 884           *
+ 885           * 描述 :SPI HIGH PERFORMANCE MODE暂停使用
+ 886           *
+ 887           * 参数 :无
+ 888           *
+ 889           * 回传值 : 无
+ 890           *
+ 891           * 注意 : 无
+ 892          */
+ 893          void spi_hp_mode_stop_using(void)
+ 894          {
+ 895   1          CLR_SPI_HP_MODE_USE;
+ 896   1      }
+ 897          /*
+ 898           * 摘要 :bit spi_hp_mode_disable(void)
+ 899           *
+ 900           * 描述 :SPI HIGH PERFORMANCE MODE关闭
+ 901           *
+ 902           * 参数 :无
+ 903           *
+ 904           * 回传值 : 0 = 失败  1= 成功 
+ 905           *
+ 906           * 注意 : 无
+ 907          */
+ 908          bit spi_hp_mode_disable(void)
+ 909          {
+ 910   1          int i = 0;
+ 911   1          IC_WritByte(TWIC_P6, SPI_ARB_EN_I8051, 0);
+ 912   1      
+ 913   1          // invalid i cache
+ 914   1        IC_WritByte(TWIC_P1, 0xFD, IC_ReadByte(TWIC_P1, 0xFD) | 0x80);
+ 915   1        IC_WritByte(TWIC_P1, 0xFD, IC_ReadByte(TWIC_P1, 0xFD) & 0x7F);
+ 916   1      
+ 917   1          IC_WritByte(TWIC_P6, SPI_HP_REG, IC_ReadByte(TWIC_P6, SPI_HP_REG) & ~SPI_HP_EN);
+ 918   1          for(i = 0; i < 255; i++)
+ 919   1          {
+ 920   2              if(!(IC_ReadByte(TWIC_P6, SPI_HP_REG) & SPI_HP_EXTRA8T))
+ 921   2              {
+ 922   3                      DBG_PRINT("SPI High Performance Mode Disable Success\n");
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 16  
+
+ 923   3                      return 1;
+ 924   3              }
+ 925   2              twdDelay(3);
+ 926   2          }
+ 927   1      
+ 928   1          DBG_PRINT("SPI High Performance Mode Disable Fail\n");    
+ 929   1          IC_WritByte(TWIC_P6, SPI_ARB_EN_I8051, 0xC7);
+ 930   1          return 0;
+ 931   1      }
+ 932          /*
+ 933           * 摘要 :bit spi_hp_mode_enable(void)
+ 934           *
+ 935           * 描述 :SPI HIGH PERFORMANCE MODE开启
+ 936           *
+ 937           * 参数 :无
+ 938           *
+ 939           * 回传值 : 0 = 失败  1= 成功 
+ 940           *
+ 941           * 注意 : 无
+ 942          */
+ 943          bit spi_hp_mode_enable(void)
+ 944          {
+ 945   1          int i = 0;
+ 946   1             
+ 947   1          IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);
+ 948   1          spi_toggle_byte_set();
+ 949   1          ospi_toggle_byte_set();
+ 950   1      
+ 951   1          // workaround recommand by shawn
+ 952   1          IC_WritByte(TWIC_P6, SPI_ARB_EN_I8051, 0);
+ 953   1          twdDelay(200);
+ 954   1               
+ 955   1          // invalid i cache
+ 956   1        IC_WritByte(TWIC_P1, 0xFD, IC_ReadByte(TWIC_P1, 0xFD) | 0x80);
+ 957   1        IC_WritByte(TWIC_P1, 0xFD, IC_ReadByte(TWIC_P1, 0xFD) & 0x7F);
+ 958   1          
+ 959   1          IC_WritByte(TWIC_P6, SPI_HP_REG, (IC_ReadByte(TWIC_P6, SPI_HP_REG) | SPI_HP_EN));
+ 960   1           
+ 961   1          for(i = 0; i < 255; i++)
+ 962   1          {
+ 963   2              if(IC_ReadByte(TWIC_P6, SPI_HP_REG) & SPI_HP_EXTRA8T)
+ 964   2              {
+ 965   3                      DBG_PRINT("SPI High Performance Mode Enable Success\n");
+ 966   3                      return 1;
+ 967   3              }
+ 968   2              twdDelay(3);
+ 969   2          }
+ 970   1      
+ 971   1          DBG_PRINT("SPI High Performance Mode Enable Fail\n");
+ 972   1          IC_WritByte(TWIC_P6, SPI_ARB_EN_I8051, 0xC7);
+ 973   1          return 0;
+ 974   1      }
+ 975          /*
+ 976           * 摘要 :static bit wait_ospi_cmd(void)
+ 977           *
+ 978           * 描述 :OSPI等待COMMAND ISSUE完成
+ 979           *
+ 980           * 参数 :无
+ 981           *
+ 982           * 回传值 : 0 = 失败 1= 成功
+ 983           *
+ 984           * 注意 : 无
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 17  
+
+ 985          */
+ 986          static bit wait_ospi_cmd(void)
+ 987          {
+ 988   1        unsigned char count=0;
+ 989   1        for(count=0; count<255; count++) {
+ 990   2          if(!(IC_ReadByte(TWIC_P6, OSPI_COMMAND_REG)&OSPI_ISSUE_CMD))
+ 991   2            return 1;
+ 992   2          else
+ 993   2            twdDelay(3);
+ 994   2        }
+ 995   1        return 0;
+ 996   1      }
+ 997          /*
+ 998           * 摘要 :static bit wait_ospi_wip(void)
+ 999           *
+1000           * 描述 :OSPI等待WIP(Write in progress)状态是否结束
+1001           *
+1002           * 参数 :无
+1003           *
+1004           * 回传值 : 0 = 失败 1= 成功
+1005           *
+1006           * 注意 : 无
+1007          */
+1008          static bit wait_ospi_wip(void)
+1009          {
+1010   1        unsigned char count=0;
+1011   1        for(count=0; count<255; count++) {
+1012   2          if((IC_ReadByte(TWIC_P6, OSPI_COMMAND_REG)&OSPI_CHECK_WIP))
+1013   2            return 1;
+1014   2          else
+1015   2            twdDelay(3);
+1016   2        }
+1017   1        return 0;
+1018   1      }
+1019          /*
+1020           * 摘要 :bit ospi_wren(void)
+1021           *
+1022           * 描述 :对FLASH下达WREN命令,允许FLASH改变状态
+1023           *
+1024           * 参数 :无
+1025           *
+1026           * 回传值 : 0 = 失败 1= 成功
+1027           *
+1028           * 注意 : 无
+1029          */
+1030          /* write enable command */
+1031          bit ospi_wren(void)
+1032          {
+1033   1          bit rc = 0;
+1034   1        IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, WRITE_ENABLE); // WREN command
+1035   1        if(!wait_ospi_wip())
+1036   1              goto EXIT;
+1037   1        IC_WritByte(TWIC_P6, OSPI_COMMAND_REG, WRITE_INSTRUCTION);  // Control
+1038   1        rc = 1;
+1039   1      EXIT:
+1040   1          if(SPI_HP_MODE_USE)
+1041   1              IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, FAST_READ_4X);
+1042   1        return rc;
+1043   1      }
+1044          /*
+1045           * 摘要 :bit ospi_wrsr(unsigned char reg1, unsigned char reg2)
+1046           *
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 18  
+
+1047           * 描述 :改变Flash状态,可以读取rdsr确认状态值
+1048           *
+1049           * 参数 :unsigned char reg  =>暂存器
+1050           *
+1051           * 回传值 : 0 = 失败 1= 成功
+1052           *
+1053           * 注意 : mxic是一个byte winbond是两个byte 
+1054          */
+1055          /* write status register command */
+1056          bit ospi_wrsr(unsigned char reg)
+1057          {
+1058   1          bit rc = 0;
+1059   1          if(!ospi_wren())
+1060   1              goto EXIT;
+1061   1      
+1062   1      #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                  IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, WS_REG);    // WRSR command
+                  IC_WritByte(TWIC_P6, OSPI_ADDRESS_REG2, reg);          // register value
+                  IC_WritByte(TWIC_P6, OSPI_ADDRESS_REG3, 0);              // register value
+                  IC_WritByte(TWIC_P6, OSPI_COMMAND_REG, WRITE_RSR_WIN);       // Control
+              #else
+1068   1          IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, WS_REG);    // WRSR command
+1069   1          IC_WritByte(TWIC_P6, OSPI_WR_DATA_REG, reg);           // register value
+1070   1          IC_WritByte(TWIC_P6, OSPI_COMMAND_REG, WRITE_RSR);     // Control
+1071   1      #endif
+1072   1      
+1073   1          if(!wait_ospi_wip())
+1074   1              goto EXIT;
+1075   1          rc = 1;
+1076   1      EXIT:
+1077   1          if(SPI_HP_MODE_USE)
+1078   1              IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, FAST_READ_4X);
+1079   1          
+1080   1          ospi_toggle_byte_set();
+1081   1          return rc;
+1082   1      }
+1083          /*
+1084           * 摘要 :bit ospi_rdsr(unsigned char* states)
+1085           *
+1086           * 描述 :读取flash内状态值
+1087           *
+1088           * 参数 :unsigned char* states =>得到的值会写入这个指标
+1089           *
+1090           * 回传值 : 0 = 失败 1= 成功
+1091           *
+1092           * 注意 : 无
+1093          */
+1094          bit ospi_rdsr(unsigned char* states)
+1095          {
+1096   1          bit rc = 0;
+1097   1          
+1098   1      #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, RS_REG_WIN); // RDSR command
+              #else
+1101   1        IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, RS_REG); // RDSR command
+1102   1      #endif
+1103   1          
+1104   1        IC_WritByte(TWIC_P6, OSPI_COMMAND_REG, READ_RSR); // Control
+1105   1        // [5:4] = oSPI_RdMUX[1:0] = 0~3;
+1106   1          IC_WritByte(TWIC_P6, OSPI_DMA_CTRL_REG2, (IC_ReadByte(TWIC_P6, OSPI_DMA_CTRL_REG2) & 0xCF) | 0x10);
+1107   1        if(!wait_ospi_cmd())
+1108   1          goto EXIT;
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 19  
+
+1109   1          // [5:4] = oSPI_RdMUX[1:0] = 0~3: oSpi_SingleWr_Data, Status/RdData/DID[7:0], DID[15:8], MID
+1110   1        *states = IC_ReadByte(TWIC_P6, OSPI_WR_DATA_REG); // register value
+1111   1          rc = 1;
+1112   1       EXIT:
+1113   1          if(SPI_HP_MODE_USE)
+1114   1              IC_WritByte(TWIC_P6, OSPI_INSTRUCTION_REG, FAST_READ_4X);
+1115   1          ospi_toggle_byte_set();
+1116   1          return rc;
+1117   1      }
+1118          /*
+1119           * 摘要 :bit spi_erase_sector(unsigned long address)
+1120           *
+1121           * 描述 :擦除FLASH(以4K为单位)
+1122           *
+1123           * 参数 :unsigned long address =>FLASH位置
+1124           *
+1125           * 回传值 : 0 = 失败 1= 成功
+1126           *
+1127           * 注意 : 无
+1128          */
+1129          bit spi_erase_sector(unsigned long address)
+1130          {
+1131   1        bit rc = 0;
+1132   1        /* WRSR */
+1133   1      #if (defined(WIN_QUAD_NOR) || defined(AMIC_QUAD_NOR))
+                if(!spi_wrsr(NO_PROTECT,NO_PROTECT | QUAD_ENABLE_WIN))
+                  goto EXIT;
+              #else
+1137   1        if(!spi_wrsr(NO_PROTECT | QUAD_ENABLE,0x00))
+1138   1          goto EXIT;
+1139   1      #endif
+1140   1      
+1141   1        /* SPI PRE WREN */
+1142   1        //IC_WritByte(TWIC_P6, SPI_4X_ENABLE_REG], (IC_ReadByte(TWIC_P6,SPI_4X_ENABLE_REG)|SPI_PRE_WREN));
+1143   1        
+1144   1          if(!spi_wren())
+1145   1              goto EXIT;
+1146   1          
+1147   1        /* SE */
+1148   1        spi_check_shadow();
+1149   1        //CONFIG_REGS[TWIC_P0|SHADOW_CTRL_CONF_REG]=0x00;
+1150   1        IC_WritByte(TWIC_P0,0xE2,0x00);   
+1151   1        IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, SECTOR_ERASE);
+1152   1      
+1153   1        /* NOR FLASH SECTOR ADDRESS */
+1154   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, address&0xFF);
+1155   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, (address>>8)&0xFF);
+1156   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, (address>>16)&0xFF);
+1157   1        IC_WritByte(TWIC_P6, SPI_COMMAND_REG, SE_ERASE);
+1158   1        if(!wait_cmd())
+1159   1              goto EXIT;
+1160   1          
+1161   1          rc = 1;
+1162   1      EXIT:
+1163   1          if(SPI_HP_MODE_USE)
+1164   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X); 
+1165   1          return rc;
+1166   1      }
+1167          /*
+1168           * 摘要 :bit spi_dma_read(unsigned long address, unsigned short xaddr, unsigned short length)
+1169           *
+1170           * 描述 :读取FLASH内的值透过DMA到XRAM
+C51 COMPILER V7.50   SPIRW                                                                 06/16/2017 08:24:33 PAGE 20  
+
+1171           *
+1172           * 参数 :unsigned long address  =>FLASH位置
+1173           *       unsigned short xaddr   =>XRAM位置
+1174           *       unsigned short length  =>搬运资料大小
+1175           *
+1176           * 回传值 : 0 = 失败 1= 成功
+1177           *
+1178           * 注意 : 无
+1179          */
+1180          #define DMA_MAX_LENGTH  0x2000
+1181          /* --- Read SPI Flash ROM via DMA moving to XDATA (0x0000~0x0400) --- */
+1182          bit spi_dma_read(unsigned long address, unsigned short xaddr, unsigned short length)
+1183          {
+1184   1          bit rc = 0;
+1185   1        
+1186   1        if(length > DMA_MAX_LENGTH)
+1187   1          {
+1188   2            ERROR(("spi_dma_read length > 8192 bytes\r\n"));
+1189   2              goto EXIT;
+1190   2          }
+1191   1        IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ);       // FR command
+1192   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG1, (address&0x000000FF));   // AL
+1193   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG2, ((address>>8)&0x000000FF));  // AM
+1194   1        IC_WritByte(TWIC_P6, SPI_ADDRESS_REG3, ((address>>16)&0x000000FF)); // AH
+1195   1        IC_WritByte(TWIC_P6, SPI_COMMAND_REG, READ_DMA);          // Control w/ Check WIP
+1196   1        IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG1, xaddr&0x00FF);        // External RAM address
+1197   1        IC_WritByte(TWIC_P6, SPI_DMA_ADDR_REG2, (xaddr>>8)&0x00FF);     // External RAM address
+1198   1        IC_WritByte(TWIC_P6, SPI_DMA_COUNT_REG1, length&0x00FF);      // DMA count
+1199   1        IC_WritByte(TWIC_P6, SPI_DMA_CTRL_REG, DMA_READ|((length&SPI_DMA_COUNT_BIT)>>8)); // DMA go
+1200   1          if((IC_ReadByte(TWIC_P6, 0x14) & 0x40))// dma interrupt mask
+1201   1          {
+1202   2              if(!wait_dma())
+1203   2              goto EXIT;
+1204   2          }
+1205   1          else// dma interrupt unmask
+1206   1          {
+1207   2              if(!wait_dma_int())
+1208   2              goto EXIT;
+1209   2          }
+1210   1      
+1211   1          rc = 1; 
+1212   1      EXIT:
+1213   1          if(SPI_HP_MODE_USE)
+1214   1              IC_WritByte(TWIC_P6, SPI_INSTRUCTION_REG, FAST_READ_4X);
+1215   1        return rc;
+1216   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3210    ----
+   CONSTANT SIZE    =    423    ----
+   XDATA SIZE       =      1      79
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----      12
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

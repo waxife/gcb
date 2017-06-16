@@ -1,0 +1,421 @@
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE I51_I2C_GPIO
+OBJECT MODULE PLACED IN .\Object\i51_i2c_gpio.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\i51_i2c_gpio.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\
+                    -tw_lib\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\i51_i2c_gpio.lst) TABS(2) OBJECT(.\Object\i51_i2c_gpio.o
+                    -bj)
+
+line level    source
+
+   1          /**
+   2           *  @file   i51_i2c_gpio.c
+   3           *  @brief  terawins I2C control function
+   4           *  $Id: i51_i2c_gpio.c,v 1.5 2013/04/03 08:27:22 onejoe Exp $
+   5           *  $Author: onejoe $
+   6           *  $Revision: 1.5 $
+   7           *
+   8           *  Copyright (c) 2012 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2012/11/29  onejoe  New file.
+  11           *
+  12           */
+  13          
+  14          /*########################################################################################################
+             -#####
+  15          
+  16          ==============================================================
+  17          
+  18          timing diagram
+  19                            .read data  .write data                                         nACK
+  20              __         ______  ______  ______  ______  ______  ______  ______  ______  __________                _
+             -__
+  21                \       /  MSB \/      \/      \/      \/      \/      \/      \/      \/ \ ACK /   ......        /
+  22          SDA    \_____/\______/\______/\______/\______/\______/\______/\______/\______/   \___/           ______/
+  23          
+  24             |<-start->|<---------------------------write/read byte------------------------------->|<------->|<-stop
+             -->|
+  25          ...1..2..3...1..2..3.........................................................4..5..67..............12..3
+  26              ______       __      __      __      __      __      __      __      __      __                   ____
+             -__
+  27                    \     /  \    /  \    /  \    /  \    /  \    /  \    /  \    /  \    /  \      ......     /
+  28          SCL        \___/  1 \__/  2 \__/  3 \__/  4 \__/  5 \__/  6 \__/  7 \__/  8 \__/ ACK\____        ___/
+  29          
+  30          ===============================================================
+  31          
+  32          communication format
+  33          
+  34          |<-D1~D8->|ACK|
+  35          
+  36          0. ack
+  37          read data, send ack.
+  38          sA: slave ACK
+  39          mA: master ACK 
+  40          
+  41          1. write 
+  42          
+  43          |S|<Slave Address(7)>|<w(0)>|<sA>|wDATA1|<sA>|...|P|    
+  44          
+  45          2. read
+  46          
+  47          |S|<Slave Address(7)>|<r(1)>|<sA>|rDATA1|<mA>|...|~mA|P|
+  48          
+  49          3.complex
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 2   
+
+  50          
+  51          3.1 read->write
+  52          
+  53          |S|<Slave Address(7)>|<r(1)>|<sA>|rDATA1|<mA>|...|~mA|S|<Slave Address(7)>|<w(0)>|<sA>|wDATA1|<sA>|...|P|
+  54          
+  55          3.2 write->read
+  56          
+  57          |S|<Slave Address(7)>|<w(0)>|<sA>|wDATA1|<sA>|...|S|<Slave Address(7)>|<r(1)>|<sA>|rDATA1|<mA>|...|~mA|P|
+  58          
+  59          4. ilegal
+  60          
+  61          |S|P|     
+  62          
+  63          ===============================================================
+  64          terawins function
+  65          
+  66          write reg
+  67          |S|<-Slave Address(7)->|w(0)|<sA>|<-Reg Address->|<sA>|<-Reg wVal->|<sA>|<-Reg+1 wVal->|<sA>|...|P|
+  68          
+  69          read reg
+  70          |S|<Slave Address(7)>|w(0)|<sA>|<-Reg Address->|<sA>|S|<Slave Address(7)>|r(1)|<sA>|<-Reg rVal->|<mA>|<-Re
+             -g+1 rVal->|<mA>|...|~mA|P|
+  71          
+  72          ##########################################################################################################
+             -###*/
+  73          #include <reg51.h>
+  74          
+  75          #include "sys.h"
+  76          #include "reg_tw.h"
+  77          #include "i51_i2c_gpio.h"
+  78          
+  79          /*
+  80           * Synopsis     void io_iIC_start();
+  81           * Description  iic通訊起始函式.
+  82           * Parameters   none
+  83           * Return       none
+  84           */
+  85          void io_iIC_start(){
+  86   1      
+  87   1      #ifdef _iIC_SPEED
+  88   1        unsigned char c;
+  89   1      #endif
+  90   1              //for restart
+  91   1        _wrSDA_H; //1  prevent create stop condition, SDA first 
+  92   1        _wrSCL_H;
+  93   1      
+  94   1        _Delay(c);
+  95   1        _wrSDA_L; //2
+  96   1        _Delay(c);
+  97   1        _wrSCL_L; //3
+  98   1        _Delay(c);
+  99   1        return;   
+ 100   1      }
+ 101          
+ 102          /*
+ 103           * Synopsis     void io_iIC_stop();
+ 104           * Description  iic通訊結束函式.
+ 105           * Parameters   none
+ 106           * Return       none
+ 107           */
+ 108          void io_iIC_stop(){
+ 109   1      
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 3   
+
+ 110   1      #ifdef _iIC_SPEED
+ 111   1        unsigned char c;
+ 112   1      #endif
+ 113   1      
+ 114   1        _wrSDA_L; //1 
+ 115   1        _wrSCL_L;
+ 116   1      
+ 117   1        _wrSCL_H; //2
+ 118   1        _Delay(c);
+ 119   1        _wrSDA_H; //3
+ 120   1        _Delay(c);
+ 121   1        return;   
+ 122   1      }
+ 123          
+ 124          /*
+ 125           * Synopsis     unsigned char io_iIC_RdByte(unsigned char ack);
+ 126           * Description  iic讀取 1 byte.
+ 127           * Parameters   ack     - 回傳交握訊號
+ 128           * Return       none
+ 129           */
+ 130          unsigned char io_iIC_RdByte(unsigned char ack){
+ 131   1      
+ 132   1      #ifdef _iIC_SPEED
+ 133   1        unsigned char c;
+ 134   1      #endif
+ 135   1        unsigned char rdData,i;
+ 136   1        
+ 137   1        rdData=0; //init rdData
+ 138   1        i=0;
+ 139   1      
+ 140   1        _iICoe_id; //sda input
+ 141   1        //_wrSDA_H; //release bus
+ 142   1        _Delay(c);
+ 143   1        
+ 144   1        while(1){
+ 145   2          _wrSCL_H; //2   
+ 146   2          rdData|=_rdSDA;//3
+ 147   2          _Delay(c);
+ 148   2          _wrSCL_L; //1
+ 149   2          _Delay(c);
+ 150   2          
+ 151   2          if(i>=7){
+ 152   3            break;
+ 153   3          }else{
+ 154   3            rdData<<=1;
+ 155   3            i++;  
+ 156   3          }                 
+ 157   2        }   
+ 158   1          _iICoe_od;//sda output
+ 159   1          if(ack)
+ 160   1          _wrSDA_H;
+ 161   1        else
+ 162   1          _wrSDA_L;
+ 163   1      
+ 164   1        _wrSCL_H; //5
+ 165   1        _Delay(c);
+ 166   1      
+ 167   1        _wrSCL_L; //7
+ 168   1        _Delay(c);
+ 169   1        return rdData;      
+ 170   1      }
+ 171          
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 4   
+
+ 172          /*
+ 173           * Synopsis     unsigned char io_iIC_wrByte(unsigned char wrData);
+ 174           * Description  iic寫入1 byte.
+ 175           * Parameters   wrData      - 寫入數值
+ 176           * Return       接收端交握訊號
+ 177           */
+ 178          unsigned char io_iIC_wrByte(unsigned char wrData){
+ 179   1      #ifdef _iIC_SPEED
+ 180   1        unsigned char c;
+ 181   1      #endif
+ 182   1      
+ 183   1        unsigned char i,ack;
+ 184   1        unsigned char mask=0x80;
+ 185   1        
+ 186   1      //  _wrSCL_L;
+ 187   1      
+ 188   1        for(i=0;i<8;i++){
+ 189   2          _wrSCL_L; //1
+ 190   2      
+ 191   2          if(mask&wrData)//write data
+ 192   2            _wrSDA_H;
+ 193   2          else
+ 194   2            _wrSDA_L;
+ 195   2      
+ 196   2          wrData<<=1;         
+ 197   2          
+ 198   2          _Delay(c);
+ 199   2          _wrSCL_H; //2
+ 200   2            _Delay(c);
+ 201   2            
+ 202   2        }
+ 203   1        _wrSCL_L;   //4
+ 204   1        _iICoe_id; //sda input
+ 205   1        _Delay(c);
+ 206   1        _wrSCL_H;   //5
+ 207   1        _Delay(c);
+ 208   1        
+ 209   1        ack = _rdSDA; //6
+ 210   1        _wrSCL_L;   //7
+ 211   1          _iICoe_od; //sda output
+ 212   1        //if(ack)
+ 213   1          //dbg(0, ("can't write!\n"));
+ 214   1      
+ 215   1        return ack;//return ack     
+ 216   1      }
+ 217          
+ 218          //write arrData[cNum] to slave, addr = cDevAddr
+ 219          
+ 220          /*
+ 221           * Synopsis     unsigned char io_iIC_wrQueue( unsigned char cDevAddr, 
+ 222           *                                            unsigned char *arrData, 
+ 223           *                                            unsigned char cNum);
+ 224           * Description  iic連續寫入.
+ 225           * Parameters   cDevAddr        - 欲通訊器件位置 
+ 226           *              arrData           - 欲寫入資料陣列指標
+ 227           *              cNum            - 資料長度
+ 228           * Return       1/0                 - 寫入 成功/失敗
+ 229           */
+ 230          unsigned char io_iIC_wrQueue(unsigned char cDevAddr, unsigned char *arrData, unsigned char cNum){
+ 231   1        unsigned char i;
+ 232   1      
+ 233   1        io_iIC_start();
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 5   
+
+ 234   1      
+ 235   1        if(io_iIC_wrByte(cDevAddr<<1)){
+ 236   2          return 0;
+ 237   2        }
+ 238   1      
+ 239   1        for(i=0;i<cNum;i++){
+ 240   2          if(!io_iIC_wrByte(*arrData++)){
+ 241   3            return 0;
+ 242   3          }
+ 243   2        }
+ 244   1      
+ 245   1        io_iIC_stop();
+ 246   1        
+ 247   1        return 1; 
+ 248   1      }
+ 249          
+ 250          //read slave addr = cDevAddr ,storage to arrData[cNum]
+ 251          
+ 252          /*
+ 253           * Synopsis     unsigned char io_iIC_rdQueue( unsigned char cDevAddr, 
+ 254           *                                            unsigned char *arrData, 
+ 255           *                                            unsigned char cNum);
+ 256           * Description  iic連續讀取.
+ 257           * Parameters   cDevAddr        - 欲通訊器件位置
+ 258           *              arrData           - 資料陣列指標
+ 259           *              cNum            - 欲讀取資料長度
+ 260           * Return       1/0                 - 讀取 成功/失敗
+ 261           */
+ 262          unsigned char io_iIC_rdQueue(unsigned char cDevAddr, unsigned char *arrData, unsigned char cNum){
+ 263   1        unsigned char i;
+ 264   1      
+ 265   1        io_iIC_start();
+ 266   1      
+ 267   1        if(io_iIC_wrByte( (cDevAddr<<1)|0x01 )){
+ 268   2          return 0;
+ 269   2        }
+ 270   1          
+ 271   1      
+ 272   1        for(i=0;i<cNum-1;i++){
+ 273   2          *arrData++ = io_iIC_RdByte(_ACK);
+ 274   2        }
+ 275   1      
+ 276   1        *arrData = io_iIC_RdByte(_nACK);
+ 277   1      
+ 278   1        io_iIC_stop();  
+ 279   1        return 1;
+ 280   1      }
+ 281          
+ 282          /*
+ 283           * Synopsis     unsigned char io_iIC_wrReg( unsigned char cDevAddr, 
+ 284           *                                          unsigned char cReg, 
+ 285           *                                          unsigned char *arrData, 
+ 286           *                                          unsigned char cNum);
+ 287           * Description  寫入T123暫存器(支援burst).
+ 288           * Parameters   cDevAddr        - 欲通訊器件位置 
+ 289           *              cReg            - 暫存器編號
+ 290           *              arrData           - 欲寫入資料陣列指標
+ 291           *              cNum            - 資料長度
+ 292           * Return       1/0                 - 寫入 成功/失敗
+ 293           */
+ 294          unsigned char io_iIC_wrReg(unsigned char cDevAddr, unsigned char cReg, 
+ 295                         unsigned char *arrData, unsigned char cNum){
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 6   
+
+ 296   1        unsigned char i;
+ 297   1      
+ 298   1        io_iIC_start();
+ 299   1        
+ 300   1        if(io_iIC_wrByte(cDevAddr)){
+ 301   2          //printf_tw("1\n");
+ 302   2          return 0;
+ 303   2        }
+ 304   1      
+ 305   1        if(io_iIC_wrByte(cReg)){
+ 306   2          //printf_tw("2\n");
+ 307   2          return 0;
+ 308   2        }
+ 309   1      
+ 310   1        for(i=0;i<cNum;i++){
+ 311   2          if(io_iIC_wrByte(arrData[i])){
+ 312   3            //printf_tw("3+%bu\n",i);
+ 313   3            return 0; 
+ 314   3          }
+ 315   2            
+ 316   2        }
+ 317   1      
+ 318   1        io_iIC_stop();  
+ 319   1      
+ 320   1        return 1;
+ 321   1      }
+ 322          
+ 323          /*
+ 324           * Synopsis     unsigned char io_iIC_rdReg( unsigned char cDevAddr, 
+ 325           *                                          unsigned char cReg, 
+ 326           *                                          unsigned char *arrData, 
+ 327           *                                          unsigned char cNum);
+ 328           * Description  讀取T123暫存器(支援burst).
+ 329           * Parameters   cDevAddr        - 欲通訊器件位置 
+ 330           *              cReg            - 暫存器編號
+ 331           *              arrData           - 資料陣列指標
+ 332           *              cNum            - 讀取資料長度
+ 333           * Return       1/0                 - 讀取 成功/失敗
+ 334           */
+ 335          unsigned char io_iIC_rdReg(unsigned char cDevAddr, unsigned char cReg, 
+ 336                         unsigned char *arrData, unsigned char cNum){
+ 337   1      #ifdef _iIC_SPEED
+ 338   1        unsigned char c;
+ 339   1      #endif
+ 340   1        unsigned char i;
+ 341   1      
+ 342   1        io_iIC_start();
+ 343   1        
+ 344   1        if(io_iIC_wrByte(cDevAddr)){
+ 345   2          return 0; 
+ 346   2        }
+ 347   1      
+ 348   1        if(io_iIC_wrByte(cReg)){
+ 349   2          return 0; 
+ 350   2        }
+ 351   1      
+ 352   1        _Delay(c);
+ 353   1        io_iIC_start();
+ 354   1      
+ 355   1        if(io_iIC_wrByte( cDevAddr|0x01 )){
+ 356   2          return 0; 
+ 357   2        }
+C51 COMPILER V7.50   I51_I2C_GPIO                                                          06/16/2017 08:24:38 PAGE 7   
+
+ 358   1        
+ 359   1        if(cNum<=0)
+ 360   1          return 0;
+ 361   1      
+ 362   1        if(cNum > 1){ 
+ 363   2          for(i=0;i<cNum-1;i++){
+ 364   3            arrData[i] = io_iIC_RdByte(_ACK);
+ 365   3          }
+ 366   2        }
+ 367   1      
+ 368   1        arrData[cNum-1] = io_iIC_RdByte(_nACK);
+ 369   1      
+ 370   1        io_iIC_stop();
+ 371   1        
+ 372   1        return 1; 
+ 373   1      }
+ 374          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    859    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----      26
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

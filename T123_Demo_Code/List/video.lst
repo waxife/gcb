@@ -1,0 +1,1703 @@
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE VIDEO
+OBJECT MODULE PLACED IN .\Object\video.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\video.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..\
+                    -tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\video.lst) TABS(2) OBJECT(.\Object\video.obj)
+
+line level    source
+
+   1          #include <reg51.h>
+   2          #include "sys.h"
+   3          #include "tw_irq.h"
+   4          #include "serial.h"
+   5          #include "cq.h"
+   6          #include "sarkey.h"
+   7          //#include "img_ctrl.h"
+   8          //#include "xgpio.h"
+   9          #include "i51_i2c_master.h"
+  10          #include "i51_i2c_gpio.h"
+  11          #include "timer.h"
+  12          
+  13          #include "nvp6124.h"
+  14          #include "video.h"
+  15          #include "nvp6124_reg.h"
+  16          #include "iccontrol.h"
+  17          #include "videodetect.h"
+  18          
+  19          /*for 144MHz data,72M clock sampling*/
+  20          //#define SAMPLING_CLK_72M
+  21          
+  22          #ifdef ONLY_720H
+              #define VDEC_108M
+              #endif
+  25          
+  26          #ifndef VDEC_108M
+  27          #define VDEC_144M
+  28          #endif
+  29          #define NTSC   0
+  30          #define PAL    1
+  31          #define SET_ALL_CH          0xff
+  32          
+  33          /*nvp6124 1080P 色彩推薦配置*/
+  34          #define BRI_CENTER_VAL_NTSC 0xF4
+  35          #define BRI_CENTER_VAL_PAL  0xF4
+  36          #define CON_CENTER_VAL_NTSC 0x90
+  37          #define CON_CENTER_VAL_PAL  0x90
+  38          #define SAT_CENTER_VAL_NTSC 0x80
+  39          #define SAT_CENTER_VAL_PAL  0x80                       
+  40          #define HUE_CENTER_VAL_NTSC 0x00
+  41          #define HUE_CENTER_VAL_PAL  0x00
+  42          
+  43          
+  44          /*nvp6124 720P 色彩推薦配置*/
+  45          #define BRI_CENTER_VAL_NTSC_720P 0x08
+  46          #define BRI_CENTER_VAL_PAL_720P  0x08
+  47          #define CON_CENTER_VAL_NTSC_720P 0x88
+  48          #define CON_CENTER_VAL_PAL_720P  0x88
+  49          #define SAT_CENTER_VAL_NTSC_720P 0x90
+  50          #define SAT_CENTER_VAL_PAL_720P  0x90                       
+  51          #define HUE_CENTER_VAL_NTSC_720P 0xFD
+  52          #define HUE_CENTER_VAL_PAL_720P  0x00
+  53                                     
+  54          /*nvp6124 960H 色彩推薦配置*/
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 2   
+
+  55          #define BRI_CENTER_VAL_NTSC_960H 0xF8
+  56          #define BRI_CENTER_VAL_PAL_960H  0xF5
+  57          #define CON_CENTER_VAL_NTSC_960H 0x80
+  58          #define CON_CENTER_VAL_PAL_960H  0x79
+  59          #define SAT_CENTER_VAL_NTSC_960H 0xA0
+  60          #define SAT_CENTER_VAL_PAL_960H  0x80                       
+  61          #define HUE_CENTER_VAL_NTSC_960H 0x01
+  62          #define HUE_CENTER_VAL_PAL_960H  0x00
+  63          
+  64          const unsigned char nvp6124_con_tbl[2]  = {CON_CENTER_VAL_NTSC, CON_CENTER_VAL_PAL};
+  65          const unsigned char nvp6124_hue_tbl[2]  = {HUE_CENTER_VAL_NTSC, HUE_CENTER_VAL_PAL};
+  66          const unsigned char nvp6124_sat_tbl[2]  = {SAT_CENTER_VAL_NTSC, SAT_CENTER_VAL_PAL};
+  67          const unsigned char nvp6124_bri_tbl[2]  = {BRI_CENTER_VAL_NTSC, BRI_CENTER_VAL_PAL};
+  68          
+  69          const unsigned char nvp6124_con_tbl_720P[2]  = {CON_CENTER_VAL_NTSC_720P, CON_CENTER_VAL_PAL_720P};
+  70          const unsigned char nvp6124_hue_tbl_720P[2]  = {HUE_CENTER_VAL_NTSC_720P, HUE_CENTER_VAL_PAL_720P};
+  71          const unsigned char nvp6124_sat_tbl_720P[2]  = {SAT_CENTER_VAL_NTSC_720P, SAT_CENTER_VAL_PAL_720P};
+  72          const unsigned char nvp6124_bri_tbl_720P[2]  = {BRI_CENTER_VAL_NTSC_720P, BRI_CENTER_VAL_PAL_720P};
+  73          
+  74          
+  75          const unsigned char nvp6124_con_tbl_960H[2]  = {CON_CENTER_VAL_NTSC_960H, CON_CENTER_VAL_PAL_960H};
+  76          const unsigned char nvp6124_hue_tbl_960H[2]  = {HUE_CENTER_VAL_NTSC_960H, HUE_CENTER_VAL_PAL_960H};
+  77          const unsigned char nvp6124_sat_tbl_960H[2]  = {SAT_CENTER_VAL_NTSC_960H, SAT_CENTER_VAL_PAL_960H};
+  78          const unsigned char nvp6124_bri_tbl_960H[2]  = {BRI_CENTER_VAL_NTSC_960H, BRI_CENTER_VAL_PAL_960H};
+  79          
+  80          const unsigned char nvp6124_motion_sens_tbl[8]= {0xe0,0xc8,0xa0,0x98,0x78,0x68,0x50,0x48};
+  81          unsigned char ch_mode_status[16]={0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x
+             -ff,0xff};
+  82          unsigned char ch_mode_status_tmp[16]={0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xf
+             -f,0xff,0xff};
+  83          
+  84          extern unsigned char nvp6124_cnt;
+  85          extern unsigned char chip_id[4];
+  86          extern unsigned char nvp6124_mode;
+  87          extern unsigned char channel;
+  88          //extern int g_soc_chiptype;
+  89          //extern void audio_init(unsigned char dec, unsigned char ch_num, unsigned char samplerate, unsigned char 
+             -bits);
+  90          
+  91          
+  92          void nvp6124_common_init(void);
+  93          //void nvp6124_pal_common_init(void);
+  94          void nvp6124_write_table(unsigned char chip_addr, unsigned char addr, unsigned char *tbl_ptr, unsigned cha
+             -r tbl_cnt);
+  95          extern void reset_nvp6114a(void);
+  96          extern void nvp6114a_outport_1mux_chseq_mode(unsigned char vformat,unsigned char mode);
+  97          
+  98          void msleep(unsigned short ms)
+  99          {
+ 100   1          ms = ms;
+ 101   1        //twdDelay(ms*100);
+ 102   1        //twdDelay(ms*10);
+ 103   1        //twdDelay(ms);
+ 104   1      }
+ 105          
+ 106          unsigned char gpio_i2c_read(unsigned char addr, unsigned char offset)
+ 107          {
+ 108   1        unsigned char rc = 0;
+ 109   1        unsigned char value = 0;
+ 110   1        rc = io_iIC_rdReg(addr,offset,&value,1);
+ 111   1        if(rc == 0)
+ 112   1        {
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 3   
+
+ 113   2          //printk("i2c read error\n");
+ 114   2        }
+ 115   1        return value;
+ 116   1      }
+ 117          
+ 118          unsigned char gpio_i2c_write(unsigned char slave, unsigned char addr, unsigned char datas)
+ 119          {
+ 120   1        unsigned char rc = 0;
+ 121   1        unsigned char value = datas;
+ 122   1        rc = io_iIC_wrReg(slave,addr,&value,1);
+ 123   1        if(rc == 0)
+ 124   1        {
+ 125   2          //printk("i2c write error\n");
+ 126   2        }
+ 127   1        return value;
+ 128   1      }
+ 129          
+ 130          //extern unsigned int nvp6124_mode;
+ 131          extern unsigned char nvp6124_slave_addr[4];
+ 132          void NVP6124_AfeReset(void)
+ 133          {
+ 134   1        gpio_i2c_write(nvp6124_slave_addr[0], 0xFF, 0x00);
+ 135   1        gpio_i2c_write(nvp6124_slave_addr[1], 0xFF, 0x00);
+ 136   1        gpio_i2c_write(nvp6124_slave_addr[0], 0x02, gpio_i2c_read(nvp6124_slave_addr[0], 0x02)|0x0F);
+ 137   1        gpio_i2c_write(nvp6124_slave_addr[1], 0x02, gpio_i2c_read(nvp6124_slave_addr[1], 0x02)|0x0F);
+ 138   1        gpio_i2c_write(nvp6124_slave_addr[0], 0x02, gpio_i2c_read(nvp6124_slave_addr[0], 0x02)&0xF0);
+ 139   1        gpio_i2c_write(nvp6124_slave_addr[1], 0x02, gpio_i2c_read(nvp6124_slave_addr[1], 0x02)&0xF0);
+ 140   1        printk("NVP6124_AfeReset done\n");
+ 141   1      }
+ 142          
+ 143          void nvp6124_datareverse(void)
+ 144          {
+ 145   1      /*
+ 146   1      BANK1 0xD2[5:2],每個bit控制一個bt656的數據順序，1為反序，0為正序。
+ 147   1      */
+ 148   1        int i = 0;                               
+ 149   1        for(i=0;i<nvp6124_cnt;i++)
+ 150   1        {
+ 151   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01);
+ 152   2          //gpio_i2c_write(nvp6124_slave_addr[i], 0xD2, 0x3C); 
+ 153   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xD2, 0x0ff); //0xFF
+ 154   2        }
+ 155   1        printk("nvp6124 data reversed\n");
+ 156   1        IC_WritByte(TWIC_P0,0xE8,0x10);
+ 157   1        IC_WritByte(TWIC_P0,0xE9,0x00);
+ 158   1        IC_WritByte(TWIC_P0,0xEA,0x10);
+ 159   1        IC_WritByte(TWIC_P0,0xEB,0xFF);
+ 160   1        IC_WritByte(TWIC_P0,0xE2,0x11);
+ 161   1      }
+ 162          
+ 163          void nvp6124_system_init(void)
+ 164          {
+ 165   1          int i = 0;                               
+ 166   1        for(i=0;i<nvp6124_cnt;i++)
+ 167   1        {
+ 168   2            gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01); 
+ 169   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x82, 0x12); 
+ 170   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x83, 0x2C); 
+ 171   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x3e, 0x10); 
+ 172   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x60); 
+ 173   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x61); 
+ 174   2            twdDelay(1000); 
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 4   
+
+ 175   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x40); 
+ 176   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x81, 0x02); 
+ 177   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x97, 0x00); 
+ 178   2            twdDelay(100); 
+ 179   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x60); 
+ 180   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x81, 0x00); 
+ 181   2            twdDelay(100); 
+ 182   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x97, 0x0F); 
+ 183   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x38, 0x18); 
+ 184   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x38, 0x08); 
+ 185   2            twdDelay(100); 
+ 186   2            printk("nvp6124b_system_init\n");
+ 187   2            twdDelay(1000);
+ 188   2            gpio_i2c_write(nvp6124_slave_addr[i], 0xCA, 0x22);//0xAE
+ 189   2        }
+ 190   1      }
+ 191          
+ 192          void software_reset(void)
+ 193          {
+ 194   1          int i = 0;                               
+ 195   1        for(i=0;i<nvp6124_cnt;i++)
+ 196   1        {
+ 197   2            gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01); 
+ 198   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x40); 
+ 199   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x81, 0x02);
+ 200   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x61);
+ 201   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x81, 0x00);
+ 202   2            msleep(100); 
+ 203   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x80, 0x60); 
+ 204   2            gpio_i2c_write(nvp6124_slave_addr[i], 0x81, 0x00);
+ 205   2            msleep(100); 
+ 206   2        }
+ 207   1        printk("\n\r nvp6124 software reset!!!\n");
+ 208   1      }           
+ 209          
+ 210          void nvp6124_common_init(void)
+ 211          {
+ 212   1        int i = 0;
+ 213   1      
+ 214   1        for(i=0;i<nvp6124_cnt;i++)
+ 215   1        {
+ 216   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x00);
+ 217   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_B0_Buf,254);
+ 218   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01);
+ 219   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_B1_Buf,254);
+ 220   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x02);
+ 221   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_B2_Buf,254);
+ 222   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x03);
+ 223   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_B3_Buf,254);
+ 224   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x04);
+ 225   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_B4_Buf,254);
+ 226   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x09);
+ 227   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_B9_Buf,254);
+ 228   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x0A);
+ 229   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_BA_Buf,254);
+ 230   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x0B);
+ 231   2              nvp6124_write_table(nvp6124_slave_addr[i],0x00,NVP6124_BB_Buf,254);
+ 232   2        }
+ 233   1      
+ 234   1        nvp6124_system_init();
+ 235   1      }
+ 236          
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 5   
+
+ 237          #if 0
+              void mpp2clk(unsigned char clktype)
+              {
+                int i=0;
+                for(i=0;i<nvp6124_cnt;i++)
+                {
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xD4, 0x0F);  //mpp1,2,3,4 port clock func enables
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xB4, 0x66);  //clock&delay setting
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xB5, 0x66);
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xB6, 0x66);  
+                  gpio_i2c_write(nvp6124_slave_addr[i], 0xB7, 0x66);
+                }
+              }
+              #endif
+ 252          
+ 253          /*nvp6124b视频模式值转换*/
+ 254          static unsigned int nvp6124b_vdsts2_nvp6124(unsigned int vdsts)
+ 255          {
+ 256   1        unsigned int ret;
+ 257   1        switch(vdsts)
+ 258   1        {
+ 259   2          case 0x00:      //nvp6124b NTSC SD状态值
+ 260   2            ret = 0x01;   //nvp6124  NTSC SD状态值
+ 261   2          break;
+ 262   2          case 0x10:          //nvp6124b PAL SD状态值
+ 263   2            ret = 0x02;
+ 264   2          break;
+ 265   2          case 0x20:      //nvp6124b NT 720P/30状态值
+ 266   2            ret = 0x04;
+ 267   2          break;
+ 268   2          case 0x21:
+ 269   2            ret = 0x08;
+ 270   2          break;
+ 271   2          case 0x22:
+ 272   2            ret = 0x10;
+ 273   2          break;
+ 274   2          case 0x23:
+ 275   2            ret = 0x20;
+ 276   2          break;
+ 277   2          case 0x30:
+ 278   2            ret = 0x40;
+ 279   2          break;
+ 280   2          case 0x31:
+ 281   2            ret = 0x80;
+ 282   2          break;
+ 283   2          case 0xFF:
+ 284   2            ret = 0x00;
+ 285   2          break;
+ 286   2          default:
+ 287   2            ret = vdsts;
+ 288   2          break;
+ 289   2        }
+ 290   1        return ret;
+ 291   1      }
+ 292          
+ 293          #define CNT 5
+ 294          unsigned int video_fmt_debounce(unsigned char ch)
+ 295          {
+ 296   1        unsigned int idx=CNT-1;
+ 297   1        unsigned int tmp, buf[CNT]={0,0,0,0,0};
+ 298   1        int i, j,cnt[CNT]={0,0,0,0,0};
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 6   
+
+ 299   1          
+ 300   1        for(i=0; i<CNT; i++)
+ 301   1        {
+ 302   2      
+ 303   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x05+ch%4);
+ 304   2          tmp = gpio_i2c_read(nvp6124_slave_addr[ch/4], 0xF0);
+ 305   2          buf[i] = nvp6124b_vdsts2_nvp6124(tmp);
+ 306   2          if(buf[i] == 0)
+ 307   2          {
+ 308   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+ 309   3            buf[i] = gpio_i2c_read(nvp6124_slave_addr[ch/4], 0xD0+(ch%4));
+ 310   3          }
+ 311   2        }
+ 312   1        for(i=0; i<CNT; i++)
+ 313   1          {
+ 314   2              for(j=0; j<CNT; j++)
+ 315   2              {
+ 316   3                  if(buf[i] == buf[j])
+ 317   3                  {
+ 318   4                    cnt[i]++;
+ 319   4                  }
+ 320   3              }
+ 321   2              if(i>0 && cnt[i-1]>=cnt[i])
+ 322   2                idx = i-1;      
+ 323   2          }
+ 324   1        printk("video_fmt_debounce ch[%d] buf[%d] = %x\n", (int)ch, (int)idx, (int)buf[idx]);
+ 325   1        return buf[idx];
+ 326   1      }
+ 327          
+ 328          /*視頻輸入制式檢測函數*/
+ 329          void video_fmt_det(nvp6124_input_videofmt *pvideofmt)
+ 330          {
+ 331   1          static int count = 0;
+ 332   1        int i=0;
+ 333   1        unsigned char tmp;
+ 334   1        //static nvp6124_input_videofmt videofmt;
+ 335   1        
+ 336   1        for(i=0; i<nvp6124_cnt*4-2; i++)
+ 337   1        {
+ 338   2          gpio_i2c_write(nvp6124_slave_addr[i/4], 0xFF, 0x05 + i%4);
+ 339   2          tmp =  gpio_i2c_read(nvp6124_slave_addr[i/4], 0xF0);
+ 340   2          pvideofmt->getvideofmt[i] = nvp6124b_vdsts2_nvp6124(tmp);
+ 341   2          if(pvideofmt->getvideofmt[i] == 0x00)
+ 342   2          {
+ 343   3            gpio_i2c_write(nvp6124_slave_addr[i/4], 0xFF, 0x00);
+ 344   3            pvideofmt->getvideofmt[i] = gpio_i2c_read(nvp6124_slave_addr[i/4], 0xD0+i%4);
+ 345   3          }
+ 346   2        #if 0
+                  if(videofmt.getvideofmt[i] != pvideofmt->getvideofmt[i])
+                  {
+                      count = 0;
+                    //pvideofmt->getvideofmt[i] = video_fmt_debounce(i);
+                    videofmt.getvideofmt[i] = pvideofmt->getvideofmt[i];
+                    return;
+                  }
+                  else
+                  {
+                      if(count++ < 10)
+                      return;
+                  }
+                #endif
+ 360   2          if(count++ >= 200)
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 7   
+
+ 361   2          {
+ 362   3            count=0;
+ 363   3              //printk("videofmt:0x%02x----i:0x%02x\n",pvideofmt->getvideofmt[i], i);
+ 364   3          }
+ 365   2          if((0x01==pvideofmt->getvideofmt[i])&&((nvp6124_mode != NTSC_MODE)||(nvp6124_difinition != NVP6124_VI_72
+             -0H)||(channel!=i)))
+ 366   2          {
+ 367   3            printk("signal change!\n");
+ 368   3            ClosePanel(0x10, 0xf0, 0x80);
+ 369   3            reset_nvp6114a(); 
+ 370   3            channel = i;
+ 371   3                nvp6114a_outport_1mux_chseq_mode(NTSC_MODE, NVP6124_VI_720H);
+ 372   3            VIPInit(VIP_720_480I);
+ 373   3            OpenPanel();
+ 374   3          }
+ 375   2          else if((0x02==pvideofmt->getvideofmt[i])&&((nvp6124_mode != PAL_MODE)||(nvp6124_difinition != NVP6124_V
+             -I_720H)||(channel!=i)))
+ 376   2          {
+ 377   3              printk("signal change!\n");
+ 378   3            ClosePanel(0x10, 0xf0, 0x80);
+ 379   3            reset_nvp6114a(); 
+ 380   3            channel = i;
+ 381   3                nvp6114a_outport_1mux_chseq_mode(PAL_MODE, NVP6124_VI_720H);
+ 382   3            VIPInit(VIP_720_576I);
+ 383   3            OpenPanel();
+ 384   3          }
+ 385   2          else if((0x04==pvideofmt->getvideofmt[i])&&((nvp6124_mode != NTSC_MODE)||(nvp6124_difinition != NVP6124_
+             -VI_720P_2530)||(channel!=i)))
+ 386   2          {
+ 387   3              printk("signal change!\n");
+ 388   3            ClosePanel(0x10, 0xf0, 0x80);
+ 389   3            reset_nvp6114a(); 
+ 390   3            channel = i;
+ 391   3                nvp6114a_outport_1mux_chseq_mode(NTSC_MODE, NVP6124_VI_720P_2530);
+ 392   3            VIPInit(VIP_720p_NTSC);
+ 393   3            OpenPanel();
+ 394   3          }
+ 395   2          else if((0x08==pvideofmt->getvideofmt[i])&&((nvp6124_mode != PAL_MODE)||(nvp6124_difinition != NVP6124_V
+             -I_720P_2530)||(channel!=i)))
+ 396   2          {
+ 397   3              printk("signal change!\n");
+ 398   3            ClosePanel(0x10, 0xf0, 0x80);
+ 399   3            reset_nvp6114a(); 
+ 400   3            channel = i;
+ 401   3                nvp6114a_outport_1mux_chseq_mode(PAL_MODE, NVP6124_VI_720P_2530);
+ 402   3            VIPInit(VIP_720P_PAL);      
+ 403   3            OpenPanel();
+ 404   3          }
+ 405   2          else if((0x40==pvideofmt->getvideofmt[i])&&((nvp6124_mode != NTSC_MODE)||(nvp6124_difinition != NVP6124_
+             -VI_1080P_2530)||(channel!=i)))
+ 406   2          {
+ 407   3              printk("signal change!\n");
+ 408   3            ClosePanel(0x10, 0xf0, 0x80);
+ 409   3            reset_nvp6114a(); 
+ 410   3            channel = i;
+ 411   3                nvp6114a_outport_1mux_chseq_mode(NTSC_MODE, NVP6124_VI_1080P_2530);
+ 412   3            VIPInit(VIP_1080P_NTSC);
+ 413   3            OpenPanel();
+ 414   3          }
+ 415   2          else if((0x80==pvideofmt->getvideofmt[i])&&((nvp6124_mode != PAL_MODE)||(nvp6124_difinition != NVP6124_V
+             -I_1080P_2530)||(channel!=i)))
+ 416   2          {
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 8   
+
+ 417   3              printk("signal change!\n");
+ 418   3            ClosePanel(0x10, 0xf0, 0x80);
+ 419   3            reset_nvp6114a();
+ 420   3            channel = i;
+ 421   3                nvp6114a_outport_1mux_chseq_mode(PAL_MODE, NVP6124_VI_1080P_2530);
+ 422   3            VIPInit(VIP_1080P_PAL);
+ 423   3            
+ 424   3            OpenPanel();
+ 425   3          }
+ 426   2        }
+ 427   1      }
+ 428          
+ 429          unsigned int nvp6124_getvideoloss(void)
+ 430          {
+ 431   1        unsigned int vloss=0, i;
+ 432   1        for(i=0;i<nvp6124_cnt;i++)
+ 433   1        {
+ 434   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x00);
+ 435   2          vloss|=(gpio_i2c_read(nvp6124_slave_addr[i], 0xB8)&0x0F)<<(4*i);
+ 436   2        }
+ 437   1        return vloss;
+ 438   1      }
+ 439          
+ 440          //#define _EQ_ADJ_COLOR_
+ 441          extern unsigned char vloss;
+ 442          unsigned char setcnt[16]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+ 443          unsigned char stage_update=0;
+ 444          
+ 445          const unsigned char ANALOG_EQ_1080P[8]  = {0x13,0x03,0x53,0x73,0x73,0x73,0x73,0x73};
+ 446          const unsigned char DIGITAL_EQ_1080P[8] = {0x00,0x00,0x00,0x00,0x8B,0x8F,0x8F,0x8F};
+ 447          #ifdef _EQ_ADJ_COLOR_
+              const unsigned char BRI_EQ_1080P[8]    = {0xF4,0xF4,0xF4,0xF4,0xF8,0xF8,0xF8,0xF8};
+              const unsigned char CON_EQ_1080P[8]    = {0x90,0x90,0x90,0x90,0x90,0x90,0x80,0x80};
+              const unsigned char SAT_EQ_1080P[8]    = {0x80,0x80,0x80,0x78,0x78,0x78,0x78,0x78};
+              const unsigned char BRI_EQ_720P[9]    = {0xF4,0xF4,0xF4,0xF4,0xF8,0xF8,0xF8,0xF8,0xF8};
+              const unsigned char CON_EQ_720P[9]    = {0x90,0x90,0x90,0x90,0x88,0x88,0x84,0x90,0x90};
+              const unsigned char SAT_EQ_720P[9]    = {0x84,0x84,0x84,0x80,0x80,0x80,0x80,0x84,0x84};
+              #endif
+ 455          const unsigned char SHARP_EQ_1080P[8]  = {0x90,0x90,0x99,0x99,0x99,0x99,0x99,0x90};
+ 456          const unsigned char PEAK_EQ_1080P[8]   = {0x00,0x10,0x00,0x00,0x00,0x00,0x50,0x00};
+ 457          const unsigned char CTI_EQ_1080P[8]    = {0x0A,0x0A,0x0A,0x0A,0x0A,0x0A,0x0A,0x0A};
+ 458          const unsigned char C_LOCK_EQ_1080P[8] = {0x92,0x92,0x92,0x92,0x92,0x92,0xA2,0xA2};
+ 459          const unsigned char UGAIN_EQ_1080P[8]  = {0x00,0x00,0x00,0x00,0x10,0x10,0x20,0x00};
+ 460          const unsigned char VGAIN_EQ_1080P[8]  = {0x00,0x00,0x00,0x00,0x10,0x10,0x20,0x00};
+ 461          
+ 462          
+ 463          const unsigned char SHARP_EQ_720P[9]   =  {0x90,0x90,0x99,0x99,0x99,0x99,0x99,0x90,0x90};
+ 464          const unsigned char PEAK_EQ_720P[9]    =  {0x00,0x20,0x10,0x10,0x00,0x00,0x40,0x20,0x20};
+ 465          const unsigned char CTI_EQ_720P[9]     =  {0x0A,0x0A,0x0A,0x0A,0x0A,0x0A,0x0A,0x0A,0x0A};
+ 466          const unsigned char C_LOCK_EQ_720P[9]  =  {0x92,0x92,0x92,0x92,0x92,0x92,0xA2,0x92,0xA2};
+ 467          const unsigned char UGAIN_EQ_720P[9]   =  {0x30,0x30,0x30,0x30,0x30,0x30,0x40,0x30,0x30};
+ 468          const unsigned char VGAIN_EQ_720P[9]   =  {0x30,0x30,0x30,0x30,0x30,0x30,0x40,0x30,0x30};
+ 469          const unsigned char ANALOG_EQ_720P[9]  =  {0x13,0x03,0x53,0x73,0x73,0x73,0x73,0x03,0x13};
+ 470          const unsigned char DIGITAL_EQ_720P[9] =  {0x00,0x00,0x00,0x00,0x88,0x8B,0x8F,0x00,0x00}; 
+ 471          
+ 472          unsigned char eq_stage[16]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+ 473          #ifdef _EQ_ADJ_COLOR_
+              void nvp6124_brightness_eq(unsigned int ch,  unsigned int stage)
+              {
+                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+                  if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+                  gpio_i2c_write(nvp6124_slave_addr[ch/4],(0x0c+(ch%4)),BRI_EQ_720P[stage]);
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 9   
+
+                else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+                  gpio_i2c_write(nvp6124_slave_addr[ch/4],(0x0c+(ch%4)),BRI_EQ_1080P[stage]);
+              }
+              
+              void nvp6124_contrast_eq(unsigned int ch,  unsigned int stage)
+              {
+                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+                  if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+                  gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),CON_EQ_720P[stage]);
+                else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+                  gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),CON_EQ_1080P[stage]);
+              }
+              
+              void nvp6124_saturation_eq(unsigned int ch,  unsigned int stage)
+              {
+                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+                  if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+                  gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x3C+(ch%4)),SAT_EQ_720P[stage]);
+                else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+                  gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x3C+(ch%4)),SAT_EQ_1080P[stage]);
+              }
+              #endif
+ 501          void nvp6124_cl_eq(unsigned int ch,  unsigned int stage)
+ 502          {
+ 503   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+ 504   1          if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+ 505   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x21+4*(ch%4)),C_LOCK_EQ_720P[stage]);
+ 506   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+ 507   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x21+4*(ch%4)),C_LOCK_EQ_1080P[stage]);
+ 508   1      }
+ 509          
+ 510          
+ 511          void nvp6124_sharpness_eq(unsigned int ch,  unsigned int stage)
+ 512          {
+ 513   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+ 514   1          if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+ 515   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x14+(ch%4)),SHARP_EQ_720P[stage]);
+ 516   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+ 517   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x14+(ch%4)),SHARP_EQ_1080P[stage]);
+ 518   1      }
+ 519          
+ 520          void nvp6124_peaking_eq(unsigned int ch,  unsigned int stage)
+ 521          {
+ 522   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+ 523   1          if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+ 524   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x18+(ch%4)),PEAK_EQ_720P[stage]);
+ 525   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+ 526   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x18+(ch%4)),PEAK_EQ_1080P[stage]);
+ 527   1      }
+ 528          
+ 529          void nvp6124_ugain_eq(unsigned int ch,  unsigned int stage)
+ 530          {
+ 531   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+ 532   1          if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+ 533   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x44+(ch%4)),UGAIN_EQ_720P[stage]);
+ 534   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+ 535   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x44+(ch%4)),UGAIN_EQ_1080P[stage]);
+ 536   1      }
+ 537          
+ 538          void nvp6124_vgain_eq(unsigned int ch,  unsigned int stage)
+ 539          {
+ 540   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 10  
+
+ 541   1          if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+ 542   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x48+(ch%4)),VGAIN_EQ_720P[stage]);
+ 543   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+ 544   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x48+(ch%4)),VGAIN_EQ_1080P[stage]);
+ 545   1      }
+ 546          
+ 547          unsigned long val_bak, val_bak_b;
+ 548          void nvp6124_set_equalizer(void)
+ 549          {
+ 550   1      //  unsigned char tmpbuf;
+ 551   1        unsigned char eqindex=0, ch;
+ 552   1      //  unsigned char tmpval;
+ 553   1        unsigned char stage_update;
+ 554   1        unsigned long val, val1;
+ 555   1        unsigned long buf[16];
+ 556   1        unsigned char c_eq_stage, y_eq_stage;
+ 557   1      
+ 558   1        for(ch=0;ch<nvp6124_cnt*4;ch++)
+ 559   1        {
+ 560   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+ 561   2          buf[0] = vloss; 
+ 562   2          buf[1] = gpio_i2c_read(nvp6124_slave_addr[ch/4],0xEC);
+ 563   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x05 + ch%4);
+ 564   2          buf[2] = gpio_i2c_read(nvp6124_slave_addr[ch/4],0xE2)&0x07;
+ 565   2          buf[3] = gpio_i2c_read(nvp6124_slave_addr[ch/4],0xE3);
+ 566   2          buf[4] = gpio_i2c_read(nvp6124_slave_addr[ch/4],0xEA)&0x07;
+ 567   2          buf[5] = gpio_i2c_read(nvp6124_slave_addr[ch/4],0xEB);
+ 568   2          
+ 569   2          if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+ 570   2          {
+ 571   3            val = buf[2];
+ 572   3            val <<= 8;
+ 573   3            val |= buf[3];
+ 574   3            val &= 0x7FF;
+ 575   3      
+ 576   3            if((((buf[0]>>(ch%4))&0x01) == 0x00) &&  (((buf[1]>>(ch%4))&0x01) == 0x01))
+ 577   3            {
+ 578   4              setcnt[ch]++;
+ 579   4      
+ 580   4              if(setcnt[ch] == 4) stage_update = 1;
+ 581   4              else      stage_update = 0;
+ 582   4            }
+ 583   3            else if((((buf[0]>>(ch%4))&0x01) == 0x01) &&  (((buf[1]>>(ch%4))&0x01) == 0x00))
+ 584   3            {
+ 585   4              stage_update = 1;
+ 586   4              setcnt[ch] = 0;
+ 587   4            }
+ 588   3            else
+ 589   3            {
+ 590   4              stage_update = 0;
+ 591   4              setcnt[ch] = 0;
+ 592   4            }
+ 593   3      
+ 594   3            if(stage_update)
+ 595   3            {
+ 596   4              val_bak = val;
+ 597   4            }
+ 598   3      
+ 599   3            if     (val_bak >= 0x00  && val_bak < 0x52  )   c_eq_stage = 1;
+ 600   3            else if(val_bak >= 0x52  && val_bak < 0x89  )   c_eq_stage = 2;
+ 601   3            else if(val_bak >= 0x89  && val_bak < 0x113 )   c_eq_stage = 3;
+ 602   3            else if(val_bak >= 0x113 && val_bak < 0x25F )   c_eq_stage = 4;
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 11  
+
+ 603   3            else if(val_bak >= 0x25F && val_bak < 0x700 )   c_eq_stage = 5;
+ 604   3            else if(val_bak >= 0x700 && val_bak < 0x7FF )   c_eq_stage = 6;
+ 605   3            else 
+ 606   3            {
+ 607   4              if((((buf[0]>>(ch%4))&0x01) == 0x00) &&  (((buf[1]>>(ch%4))&0x01) == 0x01))
+ 608   4                c_eq_stage = 7;
+ 609   4              else
+ 610   4                c_eq_stage = 0;
+ 611   4            }
+ 612   3      
+ 613   3      
+ 614   3            val1 = buf[4];
+ 615   3            val1 <<= 8;
+ 616   3            val1 |= buf[5];
+ 617   3      
+ 618   3            if(stage_update)
+ 619   3            {
+ 620   4              val_bak_b = val1;
+ 621   4            }
+ 622   3      
+ 623   3            if     (val_bak_b == 0x000)                         y_eq_stage = 0;
+ 624   3            else if(val_bak_b >  0x000 && val_bak_b < 0x0E7)    y_eq_stage = 1;
+ 625   3            else if(val_bak_b >= 0x0E7 && val_bak_b < 0x11A)    y_eq_stage = 2;
+ 626   3            else if(val_bak_b >= 0x11A && val_bak_b < 0x151)    y_eq_stage = 3;
+ 627   3            else if(val_bak_b >= 0x151 && val_bak_b < 0x181)    y_eq_stage = 4;
+ 628   3            else if(val_bak_b >= 0x181 && val_bak_b < 0x19B)    y_eq_stage = 5;
+ 629   3            else if(val_bak_b >= 0x19B && val_bak_b < 0x200)    y_eq_stage = 6;
+ 630   3            else                        y_eq_stage = 7;
+ 631   3      
+ 632   3      
+ 633   3            if(c_eq_stage >0 )
+ 634   3              eq_stage[ch] = y_eq_stage;
+ 635   3            else
+ 636   3              eq_stage[ch] = c_eq_stage;
+ 637   3      
+ 638   3            printk("1080P stage_update = %d, eq_stage[%d]=%d,y_eq_stage=%d,c_eq_stage=%d,val_bak=%x,val_bak_b=%x\n"
+             -, stage_update, ch, eq_stage[ch], y_eq_stage, c_eq_stage,val_bak,val_bak_b);
+ 639   3            if(stage_update)
+ 640   3            {
+ 641   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF,0x05+ch%4);
+ 642   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58, ANALOG_EQ_1080P[eq_stage[ch]]);
+ 643   4              
+ 644   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF,((ch%4)<2)?0x0A:0x0B);         
+ 645   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], (ch%2==0)?0x3B:0xBB, DIGITAL_EQ_1080P[eq_stage[ch]]);
+ 646   4              #ifdef _EQ_ADJ_COLOR_
+                      nvp6124_brightness_eq(ch, eq_stage[ch]);
+                      nvp6124_contrast_eq(ch, eq_stage[ch]);
+                      nvp6124_saturation_eq(ch, eq_stage[ch]);
+                      #endif
+ 651   4              nvp6124_cl_eq(ch, eq_stage[ch]);
+ 652   4              nvp6124_sharpness_eq(ch, eq_stage[ch]);
+ 653   4              nvp6124_peaking_eq(ch, eq_stage[ch]);
+ 654   4              nvp6124_ugain_eq(ch, eq_stage[ch]);
+ 655   4              nvp6124_vgain_eq(ch, eq_stage[ch]);
+ 656   4            }
+ 657   3          }
+ 658   2          else if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+ 659   2          {
+ 660   3            val = buf[2];
+ 661   3            val <<= 8;
+ 662   3            val |= buf[3];
+ 663   3      
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 12  
+
+ 664   3      
+ 665   3            if((((buf[0]>>(ch%4))&0x01) == 0x00) &&  (((buf[1]>>(ch%4))&0x01) == 0x01))
+ 666   3            {
+ 667   4              setcnt[ch]++;
+ 668   4      
+ 669   4              if(setcnt[ch] == 4) stage_update = 1;
+ 670   4              else      stage_update = 0;
+ 671   4            }
+ 672   3            else if((((buf[0]>>(ch%4))&0x01) == 0x01) &&  (((buf[1]>>(ch%4))&0x01) == 0x00))
+ 673   3            {
+ 674   4              stage_update = 1;
+ 675   4              setcnt[ch] = 0;
+ 676   4            }
+ 677   3            else
+ 678   3            {
+ 679   4              stage_update = 0;
+ 680   4              setcnt[ch] = 0;
+ 681   4            }
+ 682   3            if(stage_update )
+ 683   3            {
+ 684   4              val_bak = val;
+ 685   4            }
+ 686   3      
+ 687   3            if     (val_bak >= 0x00  && val_bak < 0x55 )   c_eq_stage = 1;
+ 688   3            else if(val_bak >= 0x55  && val_bak < 0x82 )   c_eq_stage = 2;
+ 689   3            else if(val_bak >= 0x82  && val_bak < 0xD8 )   c_eq_stage = 3;
+ 690   3            else if(val_bak >= 0xD8  && val_bak < 0x18F)   c_eq_stage = 4;
+ 691   3            else if(val_bak >= 0x18F && val_bak < 0x700)   c_eq_stage = 5;
+ 692   3            else if(val_bak >= 0x700 && val_bak < 0x7FF)   c_eq_stage = 6;
+ 693   3            else 
+ 694   3            {
+ 695   4              if((((buf[0]>>(ch%4))&0x01) == 0x00) &&  (((buf[1]>>(ch%4))&0x01) == 0x01))
+ 696   4                c_eq_stage = 7;
+ 697   4              else
+ 698   4                c_eq_stage = 0;
+ 699   4            }
+ 700   3      
+ 701   3            val1 = buf[4];
+ 702   3            val1 <<= 8;
+ 703   3            val1 |= buf[5];
+ 704   3      
+ 705   3            if(stage_update )
+ 706   3            {
+ 707   4              val_bak_b = val1;
+ 708   4            }
+ 709   3      
+ 710   3            if     (val_bak_b == 0x000)                         y_eq_stage = 0;
+ 711   3            else if(val_bak_b >  0x000 && val_bak_b < 0xF0 )    y_eq_stage = 1;
+ 712   3            else if(val_bak_b >= 0x0F0 && val_bak_b < 0x125)    y_eq_stage = 2;
+ 713   3            else if(val_bak_b >= 0x125 && val_bak_b < 0x14C)    y_eq_stage = 3;
+ 714   3            else if(val_bak_b >= 0x14C && val_bak_b < 0x16F)    y_eq_stage = 4;
+ 715   3            else if(val_bak_b >= 0x16F && val_bak_b < 0x185)    y_eq_stage = 5;
+ 716   3            else                          y_eq_stage = 6;
+ 717   3      
+ 718   3            if(   ((c_eq_stage > 0 && c_eq_stage < 3) && val_bak_b >= 0x160)  
+ 719   3              ||  ((c_eq_stage == 3) && val_bak_b >= 0x168) 
+ 720   3              ||  ((c_eq_stage == 4) && val_bak_b >= 0x195) )
+ 721   3            {
+ 722   4                y_eq_stage = 7;
+ 723   4              c_eq_stage = 7;
+ 724   4            } 
+ 725   3            else if(  ((c_eq_stage == 5) && val_bak_b >= 0x1A0) ||
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 13  
+
+ 726   3                    (val_bak == 0x7FF  && val_bak_b >= 0x1B0)   )  
+ 727   3            {
+ 728   4                y_eq_stage = 8;
+ 729   4              c_eq_stage = 8;
+ 730   4            }
+ 731   3            
+ 732   3                
+ 733   3            if(c_eq_stage>0)
+ 734   3              eq_stage[ch] = y_eq_stage;
+ 735   3            else
+ 736   3              eq_stage[ch] = c_eq_stage;
+ 737   3      
+ 738   3            printk("720P stage_update = %d, eq_stage[%d]=%d,y_eq_stage=%d,c_eq_stage=%d,val_bak=%x,val_bak_b=%x\n",
+             - stage_update, ch, eq_stage[ch], y_eq_stage, c_eq_stage,val_bak,val_bak_b);
+ 739   3            if(stage_update)
+ 740   3            {
+ 741   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF,0x05+ch%4);
+ 742   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58, ANALOG_EQ_720P[eq_stage[ch]]);
+ 743   4              
+ 744   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF,((ch%4)<2)?0x0A:0x0B);         
+ 745   4              gpio_i2c_write(nvp6124_slave_addr[ch/4], (ch%2==0)?0x3B:0xBB, DIGITAL_EQ_720P[eq_stage[ch]]);
+ 746   4              #ifdef _EQ_ADJ_COLOR_
+                      nvp6124_brightness_eq(ch, eq_stage[ch]);
+                      nvp6124_contrast_eq(ch, eq_stage[ch]);
+                      nvp6124_saturation_eq(ch, eq_stage[ch]);
+                      #endif
+ 751   4              nvp6124_cl_eq(ch, eq_stage[ch]);
+ 752   4              nvp6124_sharpness_eq(ch, eq_stage[ch]);
+ 753   4              nvp6124_peaking_eq(ch, eq_stage[ch]);
+ 754   4              nvp6124_ugain_eq(ch, eq_stage[ch]);
+ 755   4              nvp6124_vgain_eq(ch, eq_stage[ch]);
+ 756   4            }
+ 757   3          }
+ 758   2        }
+ 759   1      }
+ 760          
+ 761          /*
+ 762          nvp6124 has 4 BT656 output ports.
+ 763          nvp6114a only has 2, so ch_seq[2]&ch_seq[3] are invalid in nvp6114a.
+ 764          */
+ 765          unsigned char ch_seq[4]={2,1,0,3};
+ 766          void nvp6124_outport_1mux_chseq(void)
+ 767          {
+ 768   1        int i = 0;                               
+ 769   1        for(i=0;i<nvp6124_cnt;i++)
+ 770   1        {
+ 771   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01);
+ 772   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC0, ch_seq[0]<<4|ch_seq[0]);
+ 773   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC1, ch_seq[0]<<4|ch_seq[0]);
+ 774   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC2, ch_seq[1]<<4|ch_seq[1]);
+ 775   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC3, ch_seq[1]<<4|ch_seq[1]);
+ 776   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC4, ch_seq[2]<<4|ch_seq[2]);
+ 777   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC5, ch_seq[2]<<4|ch_seq[2]);
+ 778   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC6, ch_seq[3]<<4|ch_seq[3]);
+ 779   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC7, ch_seq[3]<<4|ch_seq[3]);
+ 780   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC8, 0x00);
+ 781   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC9, 0x00);
+ 782   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xCA, 0xFF);
+ 783   2        }
+ 784   1        printk("nvp6124_outport_1mux_chseq\n");
+ 785   1      }
+ 786          
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 14  
+
+ 787          /*
+ 788          vformat:0->NTSC, 1->PAL
+ 789          portx_mode: 
+ 790          高4bit選擇port接口[7:4]->0~3:port0~3; 
+ 791          低4bit選擇vi模式[3:0]-> (NVP6124_VI_SD,NVP6124_VI_720P_2530, NVP6124_VI_1080P_2530)
+ 792          */
+ 793          void nvp6124_outport_2mux(unsigned char vformat, unsigned char port1_mode, unsigned char port2_mode )
+ 794          {
+ 795   1        int ch, i, tmp=0;
+ 796   1        unsigned char p1_num,p2_num,port1_vimode,port2_vimode;
+ 797   1        nvp6124_video_mode vmode;
+ 798   1      
+ 799   1        p1_num = port1_mode>>0x04;
+ 800   1        p2_num = port2_mode>>0x04;
+ 801   1        port1_vimode = port1_mode&0x0F;
+ 802   1        port2_vimode = port2_mode&0x0F;
+ 803   1        for(ch=0;ch<nvp6124_cnt*4;ch++)
+ 804   1          {
+ 805   2            vmode.vformat[0] = vformat;
+ 806   2          if(ch%4 < 2)
+ 807   2            vmode.chmode[ch] = port1_vimode;
+ 808   2          else
+ 809   2            vmode.chmode[ch] = port2_vimode;
+ 810   2        }
+ 811   1        nvp6124_each_mode_setting(&vmode);
+ 812   1        for(i=0;i<nvp6124_cnt;i++)
+ 813   1        {
+ 814   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xFF, 0x01);
+ 815   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC0+p1_num*2, 0x10);    
+ 816   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC1+p1_num*2, 0x10);
+ 817   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC0+p2_num*2, 0x32);    
+ 818   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC1+p2_num*2, 0x32);
+ 819   2          tmp = (port2_vimode==NVP6124_VI_1080P_2530?1:2)<<(p2_num*4)|((port1_vimode==NVP6124_VI_1080P_2530?1:2)<<
+             -(p1_num*4));
+ 820   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC8, tmp&0xFF);         
+ 821   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC9, (tmp>>8)&0xFF);    
+ 822   2      
+ 823   2          tmp=((1<<p1_num)|(1<<p2_num));
+ 824   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xCA, (tmp<<4|tmp));    //打開端口[3:0]和時鐘[7:4],和硬件相關。
+ 825   2          
+ 826   2          if(port1_vimode == NVP6124_VI_SD)
+ 827   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCC+p1_num, 0x46);    //時鐘頻率設置
+ 828   2          else
+ 829   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCC+p1_num, 0x66);
+ 830   2          if(port2_vimode == NVP6124_VI_SD)
+ 831   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCC+p2_num, 0x46);    //時鐘頻率設置
+ 832   2          else
+ 833   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCC+p2_num, 0x66);
+ 834   2          }
+ 835   1        printk("nvp6124_outport_2mux setting\n");
+ 836   1      }
+ 837          
+ 838          /*
+ 839          vformat:0->NTSC, 1->PAL
+ 840          port1_mode: 
+ 841          高4bit選擇port接口[7:4]->0~3:port0~3; 
+ 842          低4bit選擇vi模式[3:0]-> (NVP6124_VI_SD,NVP6124_VI_720P_2530)
+ 843          */
+ 844          void nvp6124_outport_4mux(unsigned char vformat, unsigned char port1_mode )
+ 845          {
+ 846   1        int ch, i, tmp=0;
+ 847   1        unsigned char p1_num,port1_vimode;
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 15  
+
+ 848   1        nvp6124_video_mode vmode;
+ 849   1      
+ 850   1        p1_num = port1_mode>>0x04;
+ 851   1        port1_vimode = port1_mode&0x0F;
+ 852   1        for(ch=0;ch<nvp6124_cnt*4;ch++)
+ 853   1          {
+ 854   2            vmode.vformat[0] = vformat;
+ 855   2          vmode.chmode[ch] = port1_vimode;
+ 856   2        }
+ 857   1        nvp6124_each_mode_setting(&vmode);
+ 858   1        for(i=0;i<nvp6124_cnt;i++)
+ 859   1        {
+ 860   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xFF, 0x00);
+ 861   2          gpio_i2c_write( nvp6124_slave_addr[i], 0x55, 0x10);
+ 862   2          gpio_i2c_write( nvp6124_slave_addr[i], 0x56, 0x32);  //reset channel id
+ 863   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xFF, 0x01);
+ 864   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC0+p1_num*2, 0x10);    
+ 865   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC1+p1_num*2, 0x32);
+ 866   2          tmp = ((NVP6124_VI_720P_2530?3:8)<<(p1_num*4));
+ 867   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC8, tmp&0xFF);         
+ 868   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC9, (tmp>>8)&0xFF);    
+ 869   2      
+ 870   2          tmp=(1<<p1_num);
+ 871   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xCA, (tmp<<4|tmp));    //打開端口[3:0]和時鐘[7:4],和硬件相關。代
+ 872   2          
+ 873   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xCC+p1_num, 0x66);    //時鐘頻率設置
+ 874   2          }
+ 875   1        printk("nvp6124_outport_4mux setting\n");
+ 876   1      }
+ 877          
+ 878          void nvp6114a_outport_1mux_chseq(void)
+ 879          {
+ 880   1        int i = 0;    
+ 881   1        ch_seq[0] = 1;   // port A outputs channel0's video data
+ 882   1        ch_seq[1] = 0;   // port B outputs channel1's video data
+ 883   1        ch_seq[2] = 0xFF;
+ 884   1        ch_seq[3] = 0xFF;
+ 885   1        for(i=0;i<nvp6124_cnt;i++)
+ 886   1        {
+ 887   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xFF, 0x01);
+ 888   2          //gpio_i2c_write(nvp6124_slave_addr[i], 0xC0, ch_seq[0]<<4|ch_seq[0]);
+ 889   2          //gpio_i2c_write(nvp6124_slave_addr[i], 0xC1, ch_seq[0]<<4|ch_seq[0]);
+ 890   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC2, ch_seq[0]<<4|ch_seq[0]);
+ 891   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC3, ch_seq[0]<<4|ch_seq[0]);
+ 892   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC4, ch_seq[1]<<4|ch_seq[1]);
+ 893   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC5, ch_seq[1]<<4|ch_seq[1]);
+ 894   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC6, ch_seq[1]<<4|ch_seq[1]);
+ 895   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC7, ch_seq[1]<<4|ch_seq[1]);
+ 896   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC8, 0x00);
+ 897   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xC9, 0x00);
+ 898   2          gpio_i2c_write(nvp6124_slave_addr[i], 0xCA, 0xFF);
+ 899   2        }
+ 900   1        printk("nvp6114a_outport_1mux_chseq\n");
+ 901   1      }
+ 902          
+ 903          /*
+ 904          vformat:0->NTSC, 1->PAL
+ 905          portx_mode: 
+ 906          高4bit選擇port接口[7:4]->0~1:port0~1; 
+ 907          低4bit選擇vi模式[3:0]-> (NVP6124_VI_SD,NVP6124_VI_720P_2530, NVP6124_VI_1080P_2530)
+ 908          */
+ 909          void nvp6114a_outport_2mux(unsigned char vformat, unsigned char port1_mode, unsigned char port2_mode )
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 16  
+
+ 910          {
+ 911   1        int ch, i;
+ 912   1        unsigned char tmp=0;
+ 913   1        unsigned char p1_num,p2_num,port1_vimode,port2_vimode;
+ 914   1        nvp6124_video_mode vmode;
+ 915   1      
+ 916   1        p1_num = port1_mode>>0x04;
+ 917   1        p2_num = port2_mode>>0x04;
+ 918   1        port1_vimode = port1_mode&0x0F;
+ 919   1        port2_vimode = port2_mode&0x0F;
+ 920   1        for(ch=0;ch<nvp6124_cnt*4;ch++)
+ 921   1          {
+ 922   2            vmode.vformat[0] = vformat;
+ 923   2          if(ch%4 < 2)
+ 924   2            vmode.chmode[ch] = port1_vimode;
+ 925   2          else
+ 926   2            vmode.chmode[ch] = port2_vimode;
+ 927   2        }
+ 928   1        nvp6124_each_mode_setting(&vmode);
+ 929   1        for(i=0;i<nvp6124_cnt;i++)
+ 930   1        {
+ 931   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xFF, 0x01);
+ 932   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC2+p1_num*2, 0x10);    
+ 933   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC3+p1_num*2, 0x10);
+ 934   2          //gpio_i2c_write( nvp6124_slave_addr[i], 0xC2+p2_num*2, 0x32);    
+ 935   2          //gpio_i2c_write( nvp6124_slave_addr[i], 0xC3+p2_num*2, 0x32);
+ 936   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC2+p2_num*2, 0x10);    
+ 937   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC3+p2_num*2, 0x10);
+ 938   2              
+ 939   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC6, gpio_i2c_read( nvp6124_slave_addr[i], 0xC4));
+ 940   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC7, gpio_i2c_read( nvp6124_slave_addr[i], 0xC5));
+ 941   2          tmp = ((port1_vimode==NVP6124_VI_1080P_2530?1:2)<<4);
+ 942   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC8, tmp);         
+ 943   2          tmp = ((port2_vimode==NVP6124_VI_1080P_2530?1:2)<<4)|((port2_vimode==NVP6124_VI_1080P_2530?1:2));
+ 944   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC9, tmp);    
+ 945   2      
+ 946   2          //tmp=((1<<p1_num)|(1<<p2_num));
+ 947   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xCA, 0xFF);    //打開端口[3:0]和時鐘[7:4],和硬件相關。
+ 948   2          
+ 949   2          if(port1_vimode == NVP6124_VI_SD)
+ 950   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCD+p1_num*2, 0x46);    //時鐘頻率設置
+ 951   2          else
+ 952   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCD+p1_num*2, 0x66);
+ 953   2          if(port2_vimode == NVP6124_VI_SD)
+ 954   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCD+p2_num*2, 0x46);    //時鐘頻率設置
+ 955   2          else
+ 956   2            gpio_i2c_write( nvp6124_slave_addr[i], 0xCD+p2_num*2, 0x66);
+ 957   2          }
+ 958   1        printk("nvp6114A_outport_2mux setting\n");
+ 959   1      }
+ 960          
+ 961          
+ 962          /*
+ 963          vformat:0->NTSC, 1->PAL
+ 964          port1_mode: 
+ 965          高4bit選擇port接口[7:4]->0~1:port0~1; 
+ 966          低4bit選擇vi模式[3:0]-> (NVP6124_VI_SD,NVP6124_VI_720P_2530)
+ 967          */
+ 968          void nvp6114a_outport_4mux(unsigned char vformat, unsigned char port1_mode)
+ 969          {
+ 970   1        int ch, i;
+ 971   1        unsigned char tmp=0;
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 17  
+
+ 972   1        unsigned char p1_num,port1_vimode;
+ 973   1        nvp6124_video_mode vmode;
+ 974   1      
+ 975   1        p1_num = port1_mode>>0x04;
+ 976   1        port1_vimode = port1_mode&0x0F;
+ 977   1        for(ch=0;ch<nvp6124_cnt*4;ch++)
+ 978   1          {
+ 979   2            vmode.vformat[0] = vformat;
+ 980   2          vmode.chmode[ch] = port1_vimode;
+ 981   2        }
+ 982   1        nvp6124_each_mode_setting(&vmode);
+ 983   1        for(i=0;i<nvp6124_cnt;i++)
+ 984   1        {
+ 985   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xFF, 0x00);
+ 986   2          gpio_i2c_write( nvp6124_slave_addr[i], 0x55, 0x10);
+ 987   2          gpio_i2c_write( nvp6124_slave_addr[i], 0x56, 0x32);
+ 988   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xFF, 0x01);
+ 989   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC2+p1_num*2, 0x10);    
+ 990   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC3+p1_num*2, 0x32);
+ 991   2          
+ 992   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC6, gpio_i2c_read( nvp6124_slave_addr[i], 0xC4));
+ 993   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xC7, gpio_i2c_read( nvp6124_slave_addr[i], 0xC5));
+ 994   2          tmp = ((port1_vimode==NVP6124_VI_720P_2530?3:8)<<4)|((port1_vimode==NVP6124_VI_720P_2530?3:8));
+ 995   2          if(p1_num == 0)
+ 996   2          {
+ 997   3            gpio_i2c_write( nvp6124_slave_addr[i], 0xC8, tmp);
+ 998   3            gpio_i2c_write( nvp6124_slave_addr[i], 0xCA, 0x22);
+ 999   3          }
+1000   2          else
+1001   2          {
+1002   3            gpio_i2c_write( nvp6124_slave_addr[i], 0xC9, tmp); 
+1003   3            gpio_i2c_write( nvp6124_slave_addr[i], 0xCA, 0x8C);
+1004   3          }   
+1005   2          gpio_i2c_write( nvp6124_slave_addr[i], 0xCD+p1_num*2, 0x66);    //時鐘頻率設置
+1006   2          }
+1007   1        printk("nvp6114A_outport_4mux setting\n");
+1008   1      }
+1009          
+1010          void nvp6124_set_fpc(unsigned char ch, unsigned char vformat)
+1011          {
+1012   1        unsigned char tmp;
+1013   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1014   1        tmp = gpio_i2c_read(nvp6124_slave_addr[ch/4], 0x54);
+1015   1        if(vformat==PAL)
+1016   1          tmp &= ~(0x10<<(ch%4));
+1017   1        else  
+1018   1          tmp &= ~(0x10<<(ch%4)); //tmp |= (0x10<<(ch%4));
+1019   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x54, tmp);
+1020   1      }
+1021          
+1022          void nvp6124b_syncchange(unsigned char ch, nvp6124_video_mode *pvmode)
+1023          {
+1024   1        unsigned char vformat = pvmode->vformat[0];
+1025   1      
+1026   1        if(vformat == NTSC)
+1027   1        {
+1028   2          if(pvmode->chmode[ch] == NVP6124_VI_1080P_2530)
+1029   2          {
+1030   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x00);
+1031   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x23+(ch%4)*4,0x83);
+1032   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58+(ch%4),0x4E);
+1033   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], (ch%4)+0x8E,0x09);
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 18  
+
+1034   3      
+1035   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x05+(ch%4));
+1036   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x24,0x1A);
+1037   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x47,0xEE);
+1038   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50,0xC6);
+1039   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xBB,0x04);
+1040   3          }
+1041   2          else if(pvmode->chmode[ch]  == NVP6124_VI_720P_5060)
+1042   2          {
+1043   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x00);
+1044   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x23+(ch%4)*4,0x83);
+1045   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58+(ch%4),0xa8);
+1046   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], (ch%4)+0x8E,0x09);
+1047   3      
+1048   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x05+(ch%4));
+1049   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x24,0x2A); // 
+1050   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x47,0xEE);
+1051   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50,0xC6);
+1052   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xBB,0x04);
+1053   3          }
+1054   2          else
+1055   2          {
+1056   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x00);
+1057   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x23+(ch%4)*4,0x83);
+1058   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x05+(ch%4));
+1059   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x47,0x04);
+1060   3          }
+1061   2        }
+1062   1        else
+1063   1        {
+1064   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x00);
+1065   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x23+(ch%4)*4,0x83);
+1066   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xff,0x05+(ch%4));
+1067   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x47,0x04);
+1068   2        }
+1069   1      }
+1070          
+1071          void init_acp(unsigned char ch)
+1072          {
+1073   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x01);
+1074   1        //Decoder TX Setting
+1075   1        {
+1076   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xBC, 0xF7);
+1077   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xBD, 0xF7);
+1078   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA8, 0xA5);
+1079   2          //ACP_RX_D0 = 0x50;
+1080   2        }
+1081   1      
+1082   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x03+((ch%4)/2));
+1083   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x3A+((ch%2)*0x80), 0x01);
+1084   1        twdDelay(100);
+1085   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x3A+((ch%2)*0x80), 0x00);
+1086   1        twdDelay(1000);
+1087   1      }
+1088          
+1089          void acp_each_setting(unsigned char ch)
+1090          {
+1091   1        init_acp(ch);
+1092   1        
+1093   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x03+((ch%4)/2));
+1094   1        if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+1095   1        {
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 19  
+
+1096   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x00+((ch%2)*0x80), 0x0E);
+1097   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x03+((ch%2)*0x80), nvp6124_mode==PAL? 0x0D:0x0E);
+1098   2        }
+1099   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1100   1        {
+1101   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x00+((ch%2)*0x80), 0x0E);
+1102   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x03+((ch%2)*0x80), 0x0E);
+1103   2        }
+1104   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x0D+((ch%2)*0x80), 0x14);
+1105   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x0D+((ch%2)*0x80)+1, 0x00);  
+1106   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x05+((ch%2)*0x80), 0x07);
+1107   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x0A+((ch%2)*0x80), 0x03);
+1108   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x0B+((ch%2)*0x80), 0x10);
+1109   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x2F+((ch%2)*0x80), 0x00);
+1110   1      
+1111   1        //Decoder RX Setting
+1112   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x05+(ch%4));
+1113   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x30, 0x00);
+1114   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x31, 0x01);
+1115   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x32, 0x64);
+1116   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7C, 0x11);
+1117   1        if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+1118   1        {
+1119   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7D, 0x80);
+1120   2        }
+1121   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1122   1        {
+1123   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7D, 0x80);
+1124   2        }
+1125   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x03+((ch%4)/2));
+1126   1      
+1127   1        if(ch_mode_status[ch] == NVP6124_VI_720P_2530)
+1128   1        {
+1129   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x62+((ch%2)*0x80), nvp6124_mode==PAL? 0x05:0x06); // Camera TX
+             - DATA Check
+1130   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x68+((ch%2)*0x80), 0x40); // RX size
+1131   2        }
+1132   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1133   1        {
+1134   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x62+((ch%2)*0x80), 0x06); // Camera TX DATA Check
+1135   2          gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x68+((ch%2)*0x80), 0x70); // RX size
+1136   2        }
+1137   1      
+1138   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x60+((ch%2)*0x80), 0x55);
+1139   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x63+((ch%2)*0x80), 0x01);
+1140   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x66+((ch%2)*0x80), 0x80);
+1141   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x67+((ch%2)*0x80), 0x01);
+1142   1        //printk("ACP DATA READ TEST!!!!CH%d  RESOL = %s\n\r",ch, ch_mode_status[ch]==NVP6124_VI_720P_2530?"720P"
+             -:"1080P");
+1143   1      }
+1144          
+1145          void nvp6124_each_mode_setting(nvp6124_video_mode *pvmode )
+1146          {  
+1147   1        unsigned char tmp;
+1148   1        unsigned char ch, chmode[16];
+1149   1        unsigned char pn_value_sd_nt_comet[4] = {0x4D,0x0E,0x88,0x6C};
+1150   1        unsigned char pn_value_720p_30[4] =   {0xEE,0x00,0xE5,0x4E};
+1151   1        unsigned char pn_value_720p_60[4] =   {0x2C,0xF9,0xC5,0x52};
+1152   1        unsigned char pn_value_fhd_nt[4] =    {0x2C,0xF0,0xCA,0x52};
+1153   1        unsigned char pn_value_sd_pal_comet[4] = {0x75,0x35,0xB4,0x6C};
+1154   1        unsigned char pn_value_720p_25[4] =   {0x46,0x08,0x10,0x4F};
+1155   1        unsigned char pn_value_720p_50[4] =   {0x2C,0xE7,0xCF,0x52};
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 20  
+
+1156   1        unsigned char pn_value_fhd_pal[4] =   {0xC8,0x7D,0xC3,0x52};
+1157   1        unsigned char vformat = pvmode->vformat[0];
+1158   1        
+1159   1          for(ch=0;ch<(nvp6124_cnt*4);ch++)
+1160   1          {
+1161   2          chmode[ch] = pvmode->chmode[ch];
+1162   2          }
+1163   1        printk("\n\nchmode[0] %bu chmode[1] %bu chmode[2] %bu chmode[3] %bu \n\n", chmode[0],chmode[1],chmode[2],
+             -chmode[3]);
+1164   1        
+1165   1        for(ch=0;ch<(nvp6124_cnt*4);ch++)
+1166   1        {
+1167   2          //if((chmode[ch] != ch_mode_status[ch]) && (chmode[ch] < NVP6124_VI_BUTT)) 
+1168   2          if(chmode[ch] < NVP6124_VI_BUTT) 
+1169   2          {
+1170   3            switch(chmode[ch])
+1171   3            {
+1172   4              case NVP6124_VI_SD:
+1173   4              case NVP6124_VI_720H:
+1174   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1175   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x08+ch%4, vformat==PAL?0xDD:0xA0);
+1176   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x0c+ch%4, nvp6124_bri_tbl_960H[vformat%2]);
+1177   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x10+ch%4, nvp6124_con_tbl_960H[vformat%2]);
+1178   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x14+ch%4, vformat==PAL?0x80:0x80);
+1179   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x18+ch%4, vformat==PAL?0x18:0x18);
+1180   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x21+4*(ch%4), vformat==PAL?0x12:0x92);
+1181   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x23+4*(ch%4), 0x43);
+1182   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x30+ch%4, vformat==PAL?0x12:0x11);
+1183   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x3c+ch%4, nvp6124_sat_tbl_960H[vformat%2]);
+1184   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x40+ch%4, nvp6124_hue_tbl_960H[vformat%2]);
+1185   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x44+ch%4, vformat==PAL?0x00:0x00);
+1186   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x48+ch%4, vformat==PAL?0x00:0x00);
+1187   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x4c+ch%4, vformat==PAL?0x04:0x00);
+1188   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x50+ch%4, vformat==PAL?0x04:0x00);
+1189   4                if(chmode[ch]==NVP6124_VI_SD)
+1190   4                  gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58+ch%4, vformat==PAL?0x60:0xC0);
+1191   4                else
+1192   4                    gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58+ch%4, vformat==PAL?0x70:0x70);
+1193   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x5c+ch%4, vformat==PAL?0x1e:0x1e);
+1194   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x64+ch%4, vformat==PAL?0x0d:0x08);
+1195   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x81+ch%4, vformat==PAL?0x00:0x00);  
+1196   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x85+ch%4, vformat==PAL?0x11:0x11);
+1197   4                if(chmode[ch]==NVP6124_VI_720H)
+1198   4                {
+1199   5                  printk("ch %d setted to 720H %s\n", (int)ch, vformat==PAL?"PAL":"NTSC");
+1200   5                  gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x89+ch%4, vformat==PAL?0x11:0x11);
+1201   5                  gpio_i2c_write(nvp6124_slave_addr[ch/4], ch%4+0x8E, vformat==PAL?0x00:0x00);
+1202   5                }
+1203   4                else
+1204   4                {
+1205   5                  printk("ch %d setted to 960H %s\n", (int)ch, vformat==PAL?"PAL":"NTSC");
+1206   5                  gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x89+ch%4, vformat==PAL?0x10:0x00);
+1207   5                  gpio_i2c_write(nvp6124_slave_addr[ch/4], ch%4+0x8E, vformat==PAL?0x08:0x07);
+1208   5                }
+1209   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x93+ch%4, 0x00);
+1210   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x98+ch%4, vformat==PAL?0x07:0x04);
+1211   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xa0+ch%4, vformat==PAL?0x15:0x15);
+1212   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xa4+ch%4, vformat==PAL?0x05:0x07);
+1213   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x01);
+1214   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x88+ch%4, vformat==PAL?0x06:0x06);
+1215   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x8c+ch%4, vformat==PAL?0xa6:0xa6);
+1216   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xd7, gpio_i2c_read(nvp6124_slave_addr[ch/4], 0xd7)&(~(1<<(c
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 21  
+
+             -h%4))));
+1217   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x02);  //motion
+1218   4                tmp = gpio_i2c_read( nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2);
+1219   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2, (tmp&(ch%2==0?0xF0:0x0F))|(0x00<<((ch%2)*4))
+             -);
+1220   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x05+ch%4);
+1221   4                nvp6124_write_table( nvp6124_slave_addr[ch/4], 0x00, NVP6124_B5678_SD_Buf, 254 );
+1222   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x06,0x40);
+1223   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x0F,vformat==PAL?0x13:0x00);
+1224   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x1B,0x08);
+1225   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x20,0x88);
+1226   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x1E,vformat==PAL?0x00:0x01);
+1227   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x2C,vformat==PAL?0x08:0x0C);
+1228   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x35,vformat==PAL?0x17:0x15);
+1229   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x62,0x00);
+1230   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA1,vformat==PAL?0x10:0x30);
+1231   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA2,vformat==PAL?0x0E:0x0C);
+1232   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA3,vformat==PAL?0x70:0x50);
+1233   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA8,vformat==PAL?0x40:0x20);
+1234   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAC,vformat==PAL?0x10:0x20);
+1235   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAD,vformat==PAL?0x08:0x20);
+1236   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAE,vformat==PAL?0x04:0x14);
+1237   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC0,vformat==PAL?0x0D:0x00);
+1238   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x25,vformat==PAL?0xCA:0xDA);
+1239   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x09);
+1240   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x40+(ch%4), 0x60);
+1241   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x44, gpio_i2c_read(nvp6124_slave_addr[ch/4], 0x44)&(~(1<<(c
+             -h%4))));
+1242   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50+4*(ch%4),vformat==PAL?pn_value_sd_pal_comet[0]:pn_value
+             -_sd_nt_comet[0]); //ch%41 960H  
+1243   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x51+4*(ch%4),vformat==PAL?pn_value_sd_pal_comet[1]:pn_value
+             -_sd_nt_comet[1]);   
+1244   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x52+4*(ch%4),vformat==PAL?pn_value_sd_pal_comet[2]:pn_value
+             -_sd_nt_comet[2]);   
+1245   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x53+4*(ch%4),vformat==PAL?pn_value_sd_pal_comet[3]:pn_value
+             -_sd_nt_comet[3]);
+1246   4                printk("ch %bu setted to SD %s\n", (int)ch, vformat==PAL?"PAL":"NTSC");
+1247   4              break;  
+1248   4              case NVP6124_VI_720P_2530:
+1249   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1250   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x08+ch%4,vformat==PAL?0x60:0x60);
+1251   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x0c+ch%4,nvp6124_bri_tbl_720P[vformat%2]);
+1252   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x10+ch%4,nvp6124_con_tbl_720P[vformat%2]);
+1253   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x14+ch%4,vformat==PAL?0x90:0x90);
+1254   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x18+ch%4,vformat==PAL?0x30:0x30);
+1255   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x21+4*(ch%4), 0x92);
+1256   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x22+4*(ch%4), 0x0A);
+1257   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x23+4*(ch%4), 0x43); //half/ful frame
+1258   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x30+ch%4,0x15);
+1259   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x3c+ch%4,nvp6124_sat_tbl_720P[vformat%2]);
+1260   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x40+ch%4,nvp6124_hue_tbl_720P[vformat%2]);
+1261   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x44+ch%4,vformat==PAL?0x30:0x30);
+1262   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x48+ch%4,vformat==PAL?0x30:0x30);
+1263   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x4c+ch%4,vformat==PAL?0x04:0x04);
+1264   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x50+ch%4,vformat==PAL?0x04:0x04);
+1265   4                nvp6124_set_fpc(ch, vformat);
+1266   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x58+ch%4,vformat==PAL?0x80:0x90);
+1267   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x5c+ch%4,vformat==PAL?0x9e:0x9e);
+1268   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x64+ch%4,vformat==PAL?0xb1:0xb2);
+1269   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x81+ch%4,vformat==PAL?0x07:0x06);  
+1270   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x85+ch%4,vformat==PAL?0x00:0x00);
+1271   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x89+ch%4,vformat==PAL?0x10:0x10);
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 22  
+
+1272   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], ch%4+0x8E,0x0d);
+1273   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x93+ch%4,0x00);
+1274   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x98+ch%4,vformat==PAL?0x07:0x04);
+1275   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xa0+ch%4,0x15);
+1276   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xa4+ch%4,vformat==PAL?0x00:0x01);
+1277   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF,0x01);
+1278   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x88+ch%4, vformat==PAL?0x0A:0x0A); 
+1279   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x8c+ch%4, vformat==PAL?0x0A:0x0A);
+1280   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x9E, vformat==PAL?0x55:0x55);  
+1281   4                //gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xcc+ch_seq[ch%4],vformat==PAL?0x46:0x46);
+1282   4                
+1283   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xd7,gpio_i2c_read( nvp6124_slave_addr[ch/4], 0xd7)|(1<<(ch
+             -%4)));
+1284   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x02);  //motion
+1285   4                tmp = gpio_i2c_read( nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2);
+1286   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2, (tmp&(ch%2==0?0xF0:0x0F))|(0x05<<((ch%2)*4))
+             -);
+1287   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x05+ch%4);
+1288   4                nvp6124_write_table( nvp6124_slave_addr[ch/4], 0x00, NVP6124_B5678_Buf,254 );
+1289   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x01,0x0D); 
+1290   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x06,0x40); 
+1291   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x1E,vformat==PAL?0x00:0x01);
+1292   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x35,vformat==PAL?0x17:0x15);
+1293   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7A,vformat==PAL?0x00:0x01);
+1294   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7B,vformat==PAL?0x00:0x81);
+1295   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA1,vformat==PAL?0x10:0x30);
+1296   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA2,vformat==PAL?0x0E:0x0C);
+1297   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA3,vformat==PAL?0x70:0x50);
+1298   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA8,vformat==PAL?0x40:0x20);
+1299   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAC,vformat==PAL?0x10:0x20);
+1300   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAD,vformat==PAL?0x08:0x20);
+1301   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAE,vformat==PAL?0x04:0x14);
+1302   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x25,0xDB);
+1303   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x2B,0x78); 
+1304   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x59,0x00);
+1305   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58,0x13);
+1306   4                
+1307   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC0,0x16);
+1308   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC1, 0x13);
+1309   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC8, 0x04);
+1310   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xD8,0x0C);    
+1311   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xD9,0x0E); 
+1312   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDA,0x12);    
+1313   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDB,0x14); 
+1314   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDC,0x1C);    
+1315   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDD,0x2C);
+1316   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDE,0x34);
+1317   4                
+1318   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x09);
+1319   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x40+(ch%4),0x00);
+1320   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x44, 0x00);
+1321   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50+4*(ch%4),vformat==PAL?pn_value_720p_25[0]:pn_value_720p
+             -_30[0]);  //ch%41 960H  
+1322   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x51+4*(ch%4),vformat==PAL?pn_value_720p_25[1]:pn_value_720p
+             -_30[1]);    
+1323   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x52+4*(ch%4),vformat==PAL?pn_value_720p_25[2]:pn_value_720p
+             -_30[2]);    
+1324   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x53+4*(ch%4),vformat==PAL?pn_value_720p_25[3]:pn_value_720p
+             -_30[3]);  
+1325   4                printk("ch %bu setted to 720P %s\n", ch, vformat==PAL?"PAL":"NTSC");
+1326   4              break;
+1327   4              case NVP6124_VI_720P_5060:
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 23  
+
+1328   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1329   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x08+ch%4,vformat==PAL?0x60:0x60);
+1330   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x0c+ch%4,nvp6124_bri_tbl_720P[vformat%2]);
+1331   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x10+ch%4,nvp6124_con_tbl_720P[vformat%2]);
+1332   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x14+ch%4,vformat==PAL?0x90:0x90);
+1333   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x18+ch%4,vformat==PAL?0x00:0x00);
+1334   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x21+4*(ch%4), 0x92);
+1335   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x22+4*(ch%4), 0x0A);
+1336   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x23+4*(ch%4), vformat==PAL?0x43:0x41);
+1337   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x30+ch%4,vformat==PAL?0x12:0x12);
+1338   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x3c+ch%4,nvp6124_sat_tbl_720P[vformat%2]);
+1339   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x40+ch%4,nvp6124_hue_tbl_720P[vformat%2]);
+1340   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x44+ch%4,vformat==PAL?0x30:0x30);
+1341   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x48+ch%4,vformat==PAL?0x30:0x30);
+1342   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x4c+ch%4,vformat==PAL?0x04:0x04);
+1343   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x50+ch%4,vformat==PAL?0x04:0x04);
+1344   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x58+ch%4,vformat==PAL?0xc0:0xb0);
+1345   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x5c+ch%4,vformat==PAL?0x9e:0x9e);
+1346   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x64+ch%4,vformat==PAL?0xb1:0xb2);
+1347   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x81+ch%4,vformat==PAL?0x05:0x04);
+1348   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x85+ch%4,vformat==PAL?0x00:0x00);
+1349   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x89+ch%4,vformat==PAL?0x10:0x10);
+1350   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], ch%4+0x8E,vformat==PAL?0x0b:0x09);
+1351   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x93+ch%4,0x00);
+1352   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x98+ch%4,vformat==PAL?0x07:0x04);
+1353   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xa0+ch%4,vformat==PAL?0x00:0x00);
+1354   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xa4+ch%4,vformat==PAL?0x00:0x01);
+1355   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x01);
+1356   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x88+ch%4,vformat==PAL?0x4d:0x4d);  
+1357   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x8c+ch%4,vformat==PAL?0x84:0x84);
+1358   4                //gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xcc+ch_seq[ch%4],vformat==PAL?0x66:0x66);
+1359   4                if(chip_id[0] == NVP6124_R0_ID)
+1360   4                  gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xcc+ch_seq[ch%4], 0x66);
+1361   4                else if(chip_id[0] == NVP6114A_R0_ID && ch_seq[ch]!=0xFF)
+1362   4                  gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xcd+(ch_seq[ch%4]%2)*2, 0x66);
+1363   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xd7, gpio_i2c_read( nvp6124_slave_addr[ch/4], 0xd7)|(1<<(c
+             -h%4)));
+1364   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x02);  //motion
+1365   4                tmp = gpio_i2c_read( nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2);
+1366   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2, (tmp&(ch%2==0?0xF0:0x0F))|(0x05<<((ch%2)*4))
+             -);
+1367   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF, 0x05+ch%4);
+1368   4                nvp6124_write_table( nvp6124_slave_addr[ch/4], 0x00, NVP6124_B5678_Buf, 254);
+1369   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x01,0x0C);
+1370   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x06,0x40);
+1371   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x2B,0x78); 
+1372   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x59,0x01);  
+1373   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x24,vformat==PAL?0x2A:0x1A);  //sync changed
+1374   4                //gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x47,vformat==PAL?0x04:0xEE); 
+1375   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x50,vformat==PAL?0x84:0x86);
+1376   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xBB,vformat==PAL?0x00:0xE4);
+1377   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0xFF,0x09);
+1378   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x40+(ch%4), 0x00);
+1379   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x44, gpio_i2c_read( nvp6124_slave_addr[ch/4], 0x44)|(1<<(c
+             -h%4)));
+1380   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x50+4*(ch%4),vformat==PAL?pn_value_720p_50[0]:pn_value_720
+             -p_60[0]);  //ch%41 960H 
+1381   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x51+4*(ch%4),vformat==PAL?pn_value_720p_50[1]:pn_value_720
+             -p_60[1]);    
+1382   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x52+4*(ch%4),vformat==PAL?pn_value_720p_50[2]:pn_value_720
+             -p_60[2]);    
+1383   4                gpio_i2c_write( nvp6124_slave_addr[ch/4], 0x53+4*(ch%4),vformat==PAL?pn_value_720p_50[3]:pn_value_720
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 24  
+
+             -p_60[3]);
+1384   4                printk("ch %bu setted to 720P@RT %s\n", ch, vformat==PAL?"PAL":"NTSC");
+1385   4              break;    
+1386   4              case NVP6124_VI_1080P_2530:
+1387   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1388   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x08+ch%4,vformat==PAL?0x60:0x60);
+1389   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x0c+ch%4,nvp6124_bri_tbl[vformat%2]);
+1390   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x10+ch%4,nvp6124_con_tbl[vformat%2]);
+1391   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x14+ch%4,vformat==PAL?0x90:0x90);
+1392   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x18+ch%4,vformat==PAL?0x00:0x00);
+1393   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x21+4*(ch%4), 0x92);
+1394   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x22+4*(ch%4), 0x0B);
+1395   4            
+1396   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x23+4*(ch%4), 0x43);//0x83
+1397   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x30+ch%4,0x15);
+1398   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x3c+ch%4,nvp6124_sat_tbl[vformat%2]);
+1399   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x40+ch%4,nvp6124_hue_tbl[vformat%2]);
+1400   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x44+ch%4,vformat==PAL?0x00:0x00);
+1401   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x48+ch%4,vformat==PAL?0x00:0x00);
+1402   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x4c+ch%4,vformat==PAL?0x00:0x00);
+1403   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50+ch%4,vformat==PAL?0x00:0x00);
+1404   4                //nvp6124_set_fpc(ch, vformat);
+1405   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x54,vformat==PAL?0xF0:0x00);
+1406   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58+ch%4,vformat==PAL?0x78:0x57);
+1407   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x5c+ch%4,vformat==PAL?0x9e:0x9e);
+1408   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x64+ch%4,vformat==PAL?0xbf:0x8d);
+1409   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x81+ch%4,vformat==PAL?0x03:0x02);
+1410   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x85+ch%4,vformat==PAL?0x00:0x00);
+1411   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x89+ch%4,vformat==PAL?0x10:0x10);
+1412   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], ch%4+0x8E,vformat==PAL?0x0a:0x09);
+1413   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x93+ch%4,0x00);
+1414   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x98+ch%4,vformat==PAL?0x07:0x04);
+1415   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xa0+ch%4,0x15); 
+1416   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xa4+ch%4,vformat==PAL?0x00:0x01);
+1417   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x01);
+1418   4                
+1419   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x88+ch%4, vformat==PAL?0x00:0x00);//NVP6124A NYH  
+1420   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x8c+ch%4, vformat==PAL?0x42:0x42);
+1421   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xd7, gpio_i2c_read(nvp6124_slave_addr[ch/4], 0xd7)|(1<<(ch%
+             -4)));
+1422   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x02);  
+1423   4                tmp = gpio_i2c_read(nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2);
+1424   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x16+(ch%4)/2, (tmp&(ch%2==0?0xF0:0x0F))|(0x05<<((ch%2)*4)))
+             -;
+1425   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x05+ch%4);
+1426   4                nvp6124_write_table(nvp6124_slave_addr[ch/4], 0x00, NVP6124_B5678_Buf,254 );
+1427   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x01,0x0C);
+1428   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x06,0x40);
+1429   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x1E,vformat==PAL?0x00:0x01);
+1430   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x35,vformat==PAL?0x17:0x15);
+1431   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7A,vformat==PAL?0x00:0x01);
+1432   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x7B,vformat==PAL?0x00:0x81);
+1433   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA1,vformat==PAL?0x10:0x30);
+1434   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA2,vformat==PAL?0x0E:0x0C);
+1435   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA3,vformat==PAL?0x70:0x50);
+1436   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xA8,vformat==PAL?0x40:0x20);
+1437   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAC,vformat==PAL?0x10:0x20);
+1438   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAD,vformat==PAL?0x08:0x20);
+1439   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xAE,vformat==PAL?0x04:0x14);
+1440   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x2A,0x72);
+1441   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x2B,0xA8); 
+1442   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x58,0x13);
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 25  
+
+1443   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x59,0x01);
+1444   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC0, 0x16); 
+1445   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC1, 0x13);
+1446   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xC8, 0x04); 
+1447   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x47, 0xEE); 
+1448   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50, 0xC4);           
+1449   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xD8,0x10);    
+1450   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xD9,0x1F); 
+1451   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDA,0x2B);    
+1452   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDB,0x7F); 
+1453   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDC,0xFF);    
+1454   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDD,0xFF);
+1455   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xDE,0xFF);
+1456   4                
+1457   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x24,vformat==PAL?0x2A:0x1A);  
+1458   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50,vformat==PAL?0x84:0x86);
+1459   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xBB,vformat==PAL?0x00:0xE4);
+1460   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x09);
+1461   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x40+(ch%4), 0x00);
+1462   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x44, 0x00);
+1463   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x50+4*(ch%4),vformat==PAL?pn_value_fhd_pal[0]:pn_value_fhd_
+             -nt[0]);    
+1464   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x51+4*(ch%4),vformat==PAL?pn_value_fhd_pal[1]:pn_value_fhd_
+             -nt[1]);    
+1465   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x52+4*(ch%4),vformat==PAL?pn_value_fhd_pal[2]:pn_value_fhd_
+             -nt[2]);    
+1466   4                gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x53+4*(ch%4),vformat==PAL?pn_value_fhd_pal[3]:pn_value_fhd_
+             -nt[3]);  
+1467   4                printk("ch %bu setted to 1080P %s\n", ch, vformat==PAL?"PAL":"NTSC");
+1468   4              break;
+1469   4              default:
+1470   4                printk("ch%d wrong mode detected!!!\n", ch);
+1471   4                break;
+1472   4            }
+1473   3            
+1474   3            ch_mode_status[ch] = chmode[ch];
+1475   3            nvp6124b_syncchange(ch, pvmode);
+1476   3            //TODO
+1477   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x09);
+1478   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x64, 0x18);
+1479   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x65, 0xC2);
+1480   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x66, 0x01);
+1481   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x67, 0x1E);
+1482   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x68, 0x02);
+1483   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x69, 0x64);
+1484   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x6A, 0x60);
+1485   3            gpio_i2c_write(nvp6124_slave_addr[ch/4], 0x6B, 0x3C);
+1486   3            acp_each_setting(ch);
+1487   3          } 
+1488   2        }
+1489   1      }
+1490          
+1491          
+1492          
+1493          void nvp6124_video_set_contrast(unsigned int ch, unsigned int value, unsigned int v_format)
+1494          { 
+1495   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1496   1        if(value >= 100)
+1497   1        {
+1498   2          if(ch_mode_status[ch] == NVP6124_VI_SD)
+1499   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),(nvp6124_con_tbl_960H[v_format]+value-100));
+1500   2          else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 26  
+
+1501   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),(nvp6124_con_tbl[v_format]+value-100));
+1502   2          else 
+1503   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),(nvp6124_con_tbl_720P[v_format]+value-100));
+1504   2        }
+1505   1        else
+1506   1        {
+1507   2          if(ch_mode_status[ch] == NVP6124_VI_SD)
+1508   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),(nvp6124_con_tbl_960H[v_format]+(0xff-(98-value)
+             -)));
+1509   2          else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1510   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),(nvp6124_con_tbl[v_format]+(0xff-(98-value))));
+1511   2          else
+1512   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x10+(ch%4)),(nvp6124_con_tbl_720P[v_format]+(0xff-(98-value)
+             -)));
+1513   2        }
+1514   1      }
+1515          
+1516          void nvp6124_video_set_brightness(unsigned int ch, unsigned int value, unsigned int v_format)
+1517          {
+1518   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1519   1        if(value >= 100)
+1520   1        {
+1521   2          if(ch_mode_status[ch] == NVP6124_VI_SD)
+1522   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x0c+(ch%4)),(nvp6124_bri_tbl_960H[v_format]+value-100));
+1523   2          else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1524   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x0c+(ch%4)),(nvp6124_bri_tbl[v_format]+value-100));
+1525   2          else
+1526   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x0c+(ch%4)),(nvp6124_bri_tbl_720P[v_format]+value-100));
+1527   2        } 
+1528   1        else
+1529   1        {
+1530   2          if(ch_mode_status[ch] == NVP6124_VI_SD)
+1531   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x0c+(ch%4)),(nvp6124_bri_tbl_960H[v_format]+(0xff-(98-value)
+             -)));
+1532   2          else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1533   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x0c+(ch%4)),(nvp6124_bri_tbl[v_format]+(0xff-(98-value))));
+1534   2          else
+1535   2            gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x0c+(ch%4)),(nvp6124_bri_tbl_720P[v_format]+(0xff-(98-value)
+             -)));
+1536   2        } 
+1537   1      }
+1538          
+1539          void nvp6124_video_set_saturation(unsigned int ch, unsigned int value, unsigned int v_format)
+1540          {
+1541   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1542   1        if(ch_mode_status[ch] == NVP6124_VI_SD)
+1543   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x3c+(ch%4)),(nvp6124_sat_tbl_960H[v_format]+value-100));
+1544   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1545   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x3c+(ch%4)),(nvp6124_sat_tbl[v_format]+value-100));
+1546   1        else
+1547   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x3c+(ch%4)),(nvp6124_sat_tbl_720P[v_format]+value-100));
+1548   1      }
+1549          
+1550          void nvp6124_video_set_hue(unsigned int ch, unsigned int value, unsigned int v_format)
+1551          {
+1552   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1553   1        if(ch_mode_status[ch] == NVP6124_VI_SD)
+1554   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x40+(ch%4)), (nvp6124_hue_tbl_960H[v_format]+value-100));
+1555   1        else if(ch_mode_status[ch] == NVP6124_VI_1080P_2530)
+1556   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x40+(ch%4)), (nvp6124_hue_tbl[v_format]+value-100));
+1557   1        else
+1558   1          gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x40+(ch%4)), (nvp6124_hue_tbl_720P[v_format]+value-100));
+C51 COMPILER V7.50   VIDEO                                                                 06/16/2017 08:24:37 PAGE 27  
+
+1559   1      }
+1560          
+1561          void nvp6124_video_set_sharpness(unsigned int ch, unsigned int value)
+1562          {
+1563   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], 0xFF, 0x00);
+1564   1        gpio_i2c_write(nvp6124_slave_addr[ch/4], (0x14+(ch%4)), (0x90+value-100));
+1565   1      }
+1566          
+1567          void nvp6124_write_table(unsigned char chip_addr, unsigned char addr, unsigned char *tbl_ptr, unsigned cha
+             -r tbl_cnt)
+1568          {
+1569   1        unsigned char i = 0;
+1570   1        
+1571   1        for(i = 0; i < tbl_cnt; i ++)
+1572   1        {
+1573   2          gpio_i2c_write(chip_addr, (addr + i), *(tbl_ptr + i));
+1574   2        }
+1575   1      }
+1576          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =  25270    ----
+   CONSTANT SIZE    =   3387    ----
+   XDATA SIZE       =    247     416
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

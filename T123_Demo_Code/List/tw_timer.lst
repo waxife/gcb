@@ -1,0 +1,141 @@
+C51 COMPILER V7.50   TW_TIMER                                                              06/16/2017 08:24:35 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE TW_TIMER
+OBJECT MODULE PLACED IN .\Object\tw_timer.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\tw_timer.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_l
+                    -ib\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\tw_timer.lst) TABS(2) OBJECT(.\Object\tw_timer.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   tw_timer.h
+   3           *  @brief  terawins 10ms timer driver
+   4           *  $Id: tw_timer.c,v 1.4 2013/04/02 05:42:18 dos1236 Exp $
+   5           *  $Author: dos1236 $
+   6           *  $Revision: 1.4 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "tw_timer.h"
+  16          #include "tw_irq.h"
+  17          
+  18          bit TW_TIMER_OUT_FLAG=0;
+  19          static unsigned long data TW_TIMER_OUT=0;
+  20          static unsigned long data TW_TIMER_CN=0;
+  21          unsigned char TP_TIME=0x00;
+  22          /*
+  23           * 摘要 :tw_timer_start(void)
+  24           *
+  25           * 描述 :tw_timer 启动(中断开启)
+  26           *
+  27           * 参数 :无
+  28           *
+  29           * 回传值 :无
+  30           *
+  31           * 注意 : 无
+  32          */
+  33          static void tw_timer_start(void)
+  34          {
+  35   1        enable_tw_irq(IRQ_10MS_TIME);
+  36   1      }
+  37          /*
+  38           * 摘要 :tw_timer_stop(void)
+  39           *
+  40           * 描述 :tw_timer 关闭(中断关闭)
+  41           *
+  42           * 参数 :无
+  43           *
+  44           * 回传值 :无
+  45           *
+  46           * 注意 : 无
+  47          */
+  48          static void tw_timer_stop(void)
+  49          {
+  50   1        disable_tw_irq(IRQ_10MS_TIME);
+  51   1      }
+  52          /*
+  53           * 摘要 :void tw_timer_open(unsigned long count)
+  54           *
+C51 COMPILER V7.50   TW_TIMER                                                              06/16/2017 08:24:35 PAGE 2   
+
+  55           * 描述 :开启twtimer初始设定 并且设定中断时间 以10ms为单位 中断开启
+  56           *
+  57           * 参数 :unsigned long count(以10ms second设定时间)
+  58           *
+  59           * 回传值 :无
+  60           *
+  61           * 注意 : 无
+  62          */
+  63          void tw_timer_open(unsigned long count)
+  64          {
+  65   1        TW_TIMER_OUT=count;
+  66   1        TW_TIMER_CN=0;
+  67   1        TW_TIMER_OUT_FLAG=0;
+  68   1        tw_timer_start(); 
+  69   1      }
+  70          /*
+  71           * 摘要 :tw_timer_close(void)
+  72           *
+  73           * 描述 :清除tw timer初始设定 并且关闭中断
+  74           *
+  75           * 参数 :无
+  76           *
+  77           * 回传值 :无
+  78           *
+  79           * 注意 : 无
+  80          */
+  81          void tw_timer_close(void)
+  82          {
+  83   1        TW_TIMER_OUT=0;
+  84   1        TW_TIMER_CN=0;
+  85   1        TW_TIMER_OUT_FLAG=0;
+  86   1        tw_timer_stop();  
+  87   1      }
+  88          /*
+  89           * 摘要 :tw_timer_isr(void)
+  90           *
+  91           * 描述 :tw timer 中断处理程序
+  92           *
+  93           * 参数 :无
+  94           *
+  95           * 回传值 :无
+  96           *
+  97           * 注意 : 无
+  98          */
+  99          void tw_timer_isr(void)
+ 100          {
+ 101   1        TW_TIMER_CN++;
+ 102   1        TP_TIME++;
+ 103   1        if(TW_TIMER_CN>=TW_TIMER_OUT)
+ 104   1        {
+ 105   2          TW_TIMER_CN=0;
+ 106   2          TW_TIMER_OUT_FLAG=1;
+ 107   2        }
+ 108   1        clear_tw_irq(IRQ_10MS_TIME);
+ 109   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    119    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      1    ----
+   PDATA SIZE       =   ----    ----
+C51 COMPILER V7.50   TW_TIMER                                                              06/16/2017 08:24:35 PAGE 3   
+
+   DATA SIZE        =      8    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

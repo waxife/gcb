@@ -1,0 +1,5 @@
+#include "sys.h"
+#include "tw_ex_sys.h"
+#include "res_full.h"
+#include "page_RGB.h"
+#include "img_layout_struct.h"

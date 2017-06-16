@@ -1,0 +1,121 @@
+C51 COMPILER V7.50   INIT                                                                  06/16/2017 08:24:41 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE INIT
+OBJECT MODULE PLACED IN .\Object\init.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\init.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..\t
+                    -w_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\init.lst) TABS(2) OBJECT(.\Object\init.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   init.c
+   3           *  @brief  system init entry
+   4           *  $Id: init.c,v 1.8 2013/08/01 03:35:58 ken Exp $
+   5           *  $Author: ken $
+   6           *  $Revision: 1.8 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include <reg51.h>
+  15          #include "config.h"
+  16          #include "sys.h"
+  17          #include "ir.h"
+  18          #include "sarkey.h"
+  19          #include "serial.h"
+  20          #include "gpio.h"
+  21          #include "timer.h"
+  22          #include "spirw.h"
+  23          #include "cq.h"
+  24          #include "tw_irq.h"
+  25          #include "osd2api.h"
+  26          #include "videodetect.h"
+  27          #include "panel.h"
+  28          #include "gpio.h"
+  29          
+  30          extern const char code ver[];
+  31          
+  32          #if 0
+              char data GLOBAL_DATA_S_BYTE_BUFFER[4]={0};
+              unsigned char data GLOBAL_DATA_BYTE_BUFFER[16]={0};
+              unsigned short data GLOBAL_DATA_WORD_BUFFER[8]={0};
+              unsigned long data GLOBAL_DATA_DWORD_BUFFER[6]={0};
+              #endif
+  38          
+  39          static void interrupt_init(void)
+  40          {
+  41   1        EA    = ALL_INTERRUPT;
+  42   1        EX0   = EXTERNAL0_INTERRUPT;
+  43   1        ES    = SERIAL_INTERRUPT;
+  44   1        ET0   = TIMER0_INTERRUPT;
+  45   1        ET1   = TIMER1_INTERRUPT;   
+  46   1      }
+  47          
+  48          void init(void)
+  49          { 
+  50   1        /* driver and system init */
+  51   1        
+  52   1        tw_init();
+  53   1      
+  54   1        enable_quad_io();
+C51 COMPILER V7.50   INIT                                                                  06/16/2017 08:24:41 PAGE 2   
+
+  55   1      
+  56   1        init_IRQ();
+  57   1      
+  58   1        interrupt_init();
+  59   1      
+  60   1        timer0_init(1);
+  61   1      
+  62   1        timer1_init(1);
+  63   1        
+  64   1        serial_init();
+  65   1        serial_interrupt();
+  66   1        //serial1_interrupt();
+  67   1      
+  68   1        //ir_init();
+  69   1      
+  70   1        sarkey_init();
+  71   1        
+  72   1        cq_init();
+  73   1      
+  74   1        InitStateVal();
+  75   1      
+  76   1        auto_detection_init(&IML0_CVBS_TAB,&IML0_YUV_TAB,&IML0_VGA_TAB);
+  77   1      
+  78   1        VideoSet(VGA_UNKNOW,CVBS_UNKNOW,YUV_UNKNOW,0,0,0);
+  79   1        //VideoSet(CVBS_UNKNOW,YUV_UNKNOW,0,0,0);
+  80   1      
+  81   1        //vivi_init_slow();
+  82   1      
+  83   1        /* logo */
+  84   1        DBG_PRINT("\n\nWelcome to Helen %s\n", HELEN_VER);
+  85   1        DBG_PRINT("\rCopyright 2012 Terawins Inc.\n");
+  86   1        DBG_PRINT("\rRelease Version V%bu.%bu\n",ver[0],ver[1]);
+  87   1        DBG_PRINT("\r\n");
+  88   1      }
+  89          
+  90          
+  91          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    153    ----
+   CONSTANT SIZE    =     94    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,97 @@
+C51 COMPILER V7.50   I51_I2C_DRIVERS                                                       06/16/2017 08:24:36 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE I51_I2C_DRIVERS
+OBJECT MODULE PLACED IN .\Object\i51_i2c_drivers.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\i51_i2c_drivers.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;
+                    -..\tw_lib\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\i51_i2c_drivers.lst) TABS(2) OBJECT(.\Object\i51_i2c_
+                    -drivers.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   i51_i2c_drivers.h
+   3           *  @brief  i51 i2c drivers
+   4           *  $Id: i51_i2c_drivers.c,v 1.4 2013/04/02 09:46:59 onejoe Exp $
+   5           *  $Author: onejoe $
+   6           *  $Revision: 1.4 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "i51_i2c_drivers.h"
+  16          
+  17          #define BASEADDRESS 0x0000
+  18          unsigned char xdata CONFIG_REGS[0x700]  _at_ 0xF000;
+  19          
+  20          /*
+  21           * Synopsis    void iIC_WritByte( unsigned short bPage, 
+  22           *                                unsigned char bAdd, 
+  23           *                                unsigned char bData); 
+  24           * Description  Œ‘Èëi2c
+  25           * Parameters   bPage            - i2c page, ex:TWIC_P0
+  26           *              bAdd             - •º´æÆ÷¾ŽÌ–
+  27           *              bData            - ”µÖµ
+  28           * Return       none
+  29           */     
+  30          void iIC_WritByte(unsigned short bPage, unsigned char bAdd, unsigned char bData)
+  31          {
+  32   1        unsigned short Address = BASEADDRESS + bPage + bAdd;
+  33   1        CONFIG_REGS[Address]=bData;
+  34   1      }
+  35          
+  36          /*
+  37           * Synopsis    unsigned char iIC_ReadByte( unsigned short bPage, 
+  38           *                                         unsigned char bAdd);
+  39           * Description  Œ‘Èëi2c
+  40           * Parameters   bPage            - i2c page, ex:TWIC_P0
+  41           *              bAdd             - •º´æÆ÷¾ŽÌ–
+  42           * Return       •º´æÆ÷”µÖµ
+  43           */ 
+  44          unsigned char iIC_ReadByte(unsigned short bPage, unsigned char bAdd)
+  45          {
+  46   1        unsigned short Address = BASEADDRESS + bPage + bAdd;    
+  47   1        return CONFIG_REGS[Address];
+  48   1      }
+  49          
+  50          /* Single-Cycle Instruction in 148ns (27MHz) */
+  51          /*
+  52           * Synopsis    void itwdDelay(unsigned short wLoops);
+  53           * Description ÑÓßt
+C51 COMPILER V7.50   I51_I2C_DRIVERS                                                       06/16/2017 08:24:36 PAGE 2   
+
+  54           * Parameters  wLoops           - 1 count = 0.1ms 
+  55           * Return      none
+  56           */
+  57          void itwdDelay(unsigned short wLoops)  //one loop 0.1ms
+  58          {
+  59   1        
+  60   1        unsigned char tmp;
+  61   1        while (wLoops--) {
+  62   2            tmp = 68; // one loop below takes about 0.1ms
+  63   2              while (tmp--) {};
+  64   2          }
+  65   1      
+  66   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     59    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

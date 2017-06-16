@@ -1,0 +1,659 @@
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE PAGE_RGB
+OBJECT MODULE PLACED IN .\Object\page_RGB.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE i51\page_RGB.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..\tw_l
+                    -ib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\page_RGB.lst) TABS(2) OBJECT(.\Object\page_RGB.obj)
+
+line level    source
+
+   1          #include <math.h>
+   2          #include <stdio.h>
+   3          #include "sys.h"
+   4          #include "tw_widget_sys.h"
+   5          #include "res.h"
+   6          #include "spiosd.h"
+   7          #include "osd2api.h"
+   8          #include "tw_timer.h"
+   9          #include "Iccontrol.h"
+  10          
+  11          #include "page_RGB.h"
+  12          
+  13          #define K_OFFSET      8
+  14          
+  15          #define   kyADD     1 
+  16          #define   kyMENU        2
+  17          #define   kyDEC     3 
+  18          #define   kySOURCE      4
+  19          #define   kyPWR     5
+  20          #define   kyNo          30
+  21          
+  22          #define   OSD_MIN     0
+  23          #define   OSD_MID     50
+  24          #define   OSD_MAX     100
+  25          #define   OSD_GAUGE_W   10
+  26          
+  27          ///////////////////////////////////////////////////////////////////////////////
+  28          unsigned char code video_str[]="Video_Input_Test";
+  29          unsigned char code seek_str[]="Cable_Searching";
+  30          unsigned char code match_str[]="Line_Match_Test";
+  31          unsigned char code tel_str[]="Tele_Line_Test";
+  32          unsigned char code sys_str[]="System_Setting";
+  33          
+  34          unsigned char code title_str[]="Select_Frequency";
+  35          unsigned char code high_f_str[]="High_Freq->3KHz";
+  36          unsigned char code low_f_str[]="Low_Freq->1KHz";
+  37          
+  38          unsigned char code video_f_str1[]="video_test_ongoing";
+  39          unsigned char code video_f_str2[]="press_MENU_key_back";
+  40          
+  41          unsigned char code tel_f_str1[]="Line_Inject_Test";
+  42          unsigned char code tel_f_str2[]="Loop_Back_Test";
+  43          
+  44          
+  45          unsigned char code brightness_str[]="BRIGHTNESS";
+  46          unsigned char code contrast_str[]="CONTRAST";
+  47          unsigned char code color_str[]= "COLOR";
+  48          
+  49          unsigned char highlight_flag[5]= {5,2,2,2,2};
+  50          unsigned char item_num = 0;
+  51          
+  52          extern bit CD4017_EN_FLAG;
+  53          extern bit CD4066_EN_FLAG;
+  54          extern bit VIDEO_FLAG;
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 2   
+
+  55          extern bit TEL0_FLAG;
+  56          extern bit TEL1_FLAG;
+  57          
+  58          extern unsigned char dur_cb_sc; /*duration for cable searching*/
+  59          
+  60          typedef enum 
+  61          {
+  62            Main_M=1,
+  63            Bright_M,
+  64            Contrast_M,
+  65            Color_M,
+  66            Freq_M,
+  67            Video_M,
+  68            Tel_M,
+  69            End_Menu,
+  70          } OSD_MENU;
+  71          ///////////////////////////////////////////////////////////////////////////////
+  72          
+  73          unsigned char key,flagkey=0;
+  74          unsigned char m_bOSDEnable;
+  75          unsigned char MenuIndex;
+  76          char Bright1T;
+  77          char ContrastT;
+  78          char ColorT;
+  79          
+  80          unsigned char ReadKey(void)
+  81          {
+  82   1        unsigned char i,j;
+  83   1        unsigned char temp,temp1;
+  84   1        unsigned char value=0x00;
+  85   1        temp =IC_ReadByte(TWIC_P3, 0x24);
+  86   1        
+  87   1        j=0;
+  88   1        for(i=0;i<10;i++)
+  89   1        {
+  90   2          twdDelay(20);
+  91   2          temp1 =IC_ReadByte(TWIC_P3, 0x24);
+  92   2          if(abs(temp1-temp)<K_OFFSET) j++;
+  93   2        }
+  94   1        if(j<8) return 0;
+  95   1        
+  96   1        if((temp1>=(0x80-K_OFFSET))&&(temp1<=(0x80+K_OFFSET)))
+  97   1        {
+  98   2          value=kyADD;  // +
+  99   2        }
+ 100   1        else if((temp1>=(0x55-K_OFFSET))&&(temp1<=(0x55+K_OFFSET)))
+ 101   1        {
+ 102   2          value=kyMENU;  // menu
+ 103   2        }
+ 104   1        else if((temp1>=(0x2a-K_OFFSET))&&(temp1<=(0x2a+K_OFFSET)))
+ 105   1        {
+ 106   2          value=kyDEC;  // —
+ 107   2        }
+ 108   1          
+ 109   1      
+ 110   1        return value;
+ 111   1        
+ 112   1      }
+ 113          
+ 114          void OSDShow1BPString(unsigned char*Str, unsigned char x, unsigned char y, unsigned char color)
+ 115          {
+ 116   1        unsigned char len;
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 3   
+
+ 117   1        unsigned char ss[50];
+ 118   1        struct tw_icons temp ;
+ 119   1        unsigned char *pStr = Str;
+ 120   1        
+ 121   1        temp = page_rgb_rom_font_1;
+ 122   1        len = 0;
+ 123   1        while((*pStr) != 0) 
+ 124   1        {
+ 125   2          ss[len] = (*pStr++)-'0'+ 38; // 38是字符0的索引号
+ 126   2          len++;
+ 127   2        }
+ 128   1        temp.x = x;
+ 129   1        temp.y = y;
+ 130   1        temp.width = len;
+ 131   1        temp.table = ss;
+ 132   1        temp.color = color;
+ 133   1        tw_icons_draw(&temp);
+ 134   1      }
+ 135          
+ 136          void OSDShowGaugeFont(unsigned short index, unsigned char x, unsigned char y, unsigned char color)
+ 137          {
+ 138   1        unsigned char ss[5];
+ 139   1        struct tw_icons tempIcons;
+ 140   1        ss[0] = index+3; // 3是进度条的起始索引号
+ 141   1        ss[1] = 0;
+ 142   1        tempIcons = page_rgb_rom_font_5;
+ 143   1        tempIcons.x = x;
+ 144   1        tempIcons.y = y;
+ 145   1        tempIcons.table = ss;
+ 146   1        tempIcons.color = color;
+ 147   1        tw_icons_draw(&tempIcons);
+ 148   1      }
+ 149          
+ 150          void OSDShowGauge(unsigned char value, unsigned char x, unsigned char y, unsigned char cColor)
+ 151          {
+ 152   1        unsigned short i,temp;
+ 153   1      
+ 154   1        if(value>OSD_MAX) value=OSD_MAX;
+ 155   1        if(value<OSD_MIN) value=OSD_MIN;
+ 156   1        temp=(OSD_GAUGE_W*value);
+ 157   1        temp=temp/OSD_MAX;
+ 158   1        OSDShowGaugeFont(5,x++,y,cColor);
+ 159   1        for(i=0;i<temp;i++) OSDShowGaugeFont(4,x++,y,cColor);
+ 160   1        i++; 
+ 161   1        if(i<=OSD_GAUGE_W)
+ 162   1        {
+ 163   2          temp=4*OSD_GAUGE_W*value;
+ 164   2          temp=temp/OSD_MAX%4;
+ 165   2          switch (temp)
+ 166   2          {
+ 167   3            case 0: OSDShowGaugeFont(0,x++,y,cColor); break;
+ 168   3            case 1: OSDShowGaugeFont(1,x++,y,cColor); break;
+ 169   3            case 2: OSDShowGaugeFont(2,x++,y,cColor); break;
+ 170   3            case 3: OSDShowGaugeFont(3,x++,y,cColor); break;
+ 171   3          }
+ 172   2        }
+ 173   1        for(;i<OSD_GAUGE_W;i++) OSDShowGaugeFont(0,x++,y,cColor);
+ 174   1        OSDShowGaugeFont(6,x++,y,cColor);
+ 175   1      }
+ 176          
+ 177          void OSDShowMenu(unsigned char item)
+ 178          {
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 4   
+
+ 179   1        char ss[5];
+ 180   1        struct tw_icons temp;
+ 181   1        
+ 182   1        //osd_clear_block(0,0,15,2,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 183   1        //osd_clear_menu(CUR_MENU_P->addr, CUR_MENU_P->width, CUR_MENU_P->height);
+ 184   1        //tw_osd_clear_menu();
+ 185   1      
+ 186   1        if(item==Main_M)
+ 187   1        {
+ 188   2          temp = page_rgb_rom_font_1;/*tubiao*/
+ 189   2          temp.x = 6;
+ 190   2          temp.y = 0;
+ 191   2          tw_icons_draw(&temp);
+ 192   2          
+ 193   2          //DBG_PRINT("OSDShowMenu color of line match = %bd\r\n", highlight_flag[2]);
+ 194   2      
+ 195   2          OSDShow1BPString(video_str,6,2,highlight_flag[0]);/*biaoti*/
+ 196   2          OSDShow1BPString(seek_str,6,4,highlight_flag[1]);/*biaoti*/
+ 197   2          OSDShow1BPString(match_str,6,6,highlight_flag[2]);/*biaoti*/
+ 198   2          OSDShow1BPString(tel_str,6,8,highlight_flag[3]);/*biaoti*/
+ 199   2          OSDShow1BPString(sys_str,6,10,highlight_flag[4]);/*biaoti*/
+ 200   2        }
+ 201   1        else if(item==Bright_M)
+ 202   1        {
+ 203   2      
+ 204   2          //osd_clear_block(0,0,25,12,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 205   2      
+ 206   2          tw_osd_clear_menu();
+ 207   2          temp = page_rgb_rom_font_1;/*tubiao*/
+ 208   2          temp.x = 4;
+ 209   2          temp.y = 0;
+ 210   2          tw_icons_draw(&temp);
+ 211   2          //OSDShow1BPString(brightness_str,4,1,2);
+ 212   2          OSDShow1BPString(brightness_str,8,0,2);/*biaoti*/
+ 213   2          //OSDShowGauge(Bright1T,1,2,2);
+ 214   2          OSDShowGauge(Bright1T,6,2,2); /*daizhuangtiao*/
+ 215   2          sprintf(ss,"%03d",(int)Bright1T);
+ 216   2          //OSDShow1BPString(ss,8,1,2);
+ 217   2          OSDShow1BPString(ss,11,1,2); /*shuzixianshi*/
+ 218   2        }
+ 219   1        else if(item==Contrast_M)
+ 220   1        {
+ 221   2          //osd_clear_block(0,0,25,12,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 222   2      
+ 223   2          tw_osd_clear_menu();
+ 224   2          temp = page_rgb_rom_font_2;
+ 225   2          temp.x = 4;
+ 226   2          temp.y = 0;
+ 227   2          tw_icons_draw(&temp);
+ 228   2          //OSDShow1BPString(contrast_str,14,16,1);
+ 229   2          OSDShow1BPString(contrast_str,8,0,2);
+ 230   2          //OSDShowGauge(ContrastT,11,17,1);
+ 231   2          OSDShowGauge(ContrastT,6,2,2);
+ 232   2          sprintf(ss,"%03d",(int)ContrastT);
+ 233   2          //OSDShow1BPString(ss,33,16,1);
+ 234   2          OSDShow1BPString(ss,11,1,2);
+ 235   2        }
+ 236   1        else if(item==Color_M)
+ 237   1        {
+ 238   2          //osd_clear_block(0,0,25,12,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 239   2      
+ 240   2          tw_osd_clear_menu();
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 5   
+
+ 241   2          temp = page_rgb_rom_font_3;
+ 242   2          temp.x = 4;
+ 243   2          temp.y = 0;
+ 244   2          tw_icons_draw(&temp);
+ 245   2          //OSDShow1BPString(color_str,14,16,1);
+ 246   2          OSDShow1BPString(color_str,8,0,2);
+ 247   2          //OSDShowGauge(ColorT,11,17,1);
+ 248   2          OSDShowGauge(ColorT,6,2,2);
+ 249   2          sprintf(ss,"%03d",(int)ColorT);
+ 250   2          //OSDShow1BPString(ss,33,16,1);
+ 251   2          OSDShow1BPString(ss,11,1,2);
+ 252   2          if(dur_cb_sc==1)
+ 253   2          {
+ 254   3            highlight_flag[0] = 1;
+ 255   3            highlight_flag[1] = 2;
+ 256   3          }
+ 257   2          else
+ 258   2          {
+ 259   3            highlight_flag[0] = 2;
+ 260   3            highlight_flag[1] = 1;
+ 261   3          }
+ 262   2      
+ 263   2        }
+ 264   1        else if(item==Freq_M)
+ 265   1        {
+ 266   2          //osd_clear_block(0,0,25,12,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 267   2      
+ 268   2          tw_osd_clear_menu();
+ 269   2          temp = page_rgb_rom_font_4;
+ 270   2          temp.x = 4;
+ 271   2          temp.y = 0;
+ 272   2          tw_icons_draw(&temp);
+ 273   2      
+ 274   2          DBG_PRINT("OSDShowMenu highlight_flag[0] = %bd\r\n", highlight_flag[0]);
+ 275   2          DBG_PRINT("OSDShowMenu highlight_flag[1] = %bd\r\n", highlight_flag[1]);
+ 276   2          
+ 277   2          OSDShow1BPString(title_str,6,0,2);
+ 278   2          OSDShow1BPString(high_f_str,6,4,highlight_flag[0]);
+ 279   2          OSDShow1BPString(low_f_str,6,6,highlight_flag[1]);
+ 280   2        }
+ 281   1        else if(item==Video_M)
+ 282   1        {
+ 283   2          //osd_clear_block(0,0,25,12,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 284   2      
+ 285   2          tw_osd_clear_menu();
+ 286   2          OSDShow1BPString(video_f_str1,2,4,2);
+ 287   2          OSDShow1BPString(video_f_str2,2,6,2);
+ 288   2          VIDEO_FLAG = 1;
+ 289   2          DBG_PRINT("VIDEO_M enable\r\n");
+ 290   2          
+ 291   2        }
+ 292   1        else if(item==Tel_M)
+ 293   1        {
+ 294   2          //osd_clear_block(0,0,25,12,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 295   2      
+ 296   2          tw_osd_clear_menu();
+ 297   2              
+ 298   2          OSDShow1BPString(tel_f_str1,4,4,highlight_flag[0]);
+ 299   2          OSDShow1BPString(tel_f_str2,4,6,highlight_flag[1]);
+ 300   2      
+ 301   2          DBG_PRINT("Telephone test\r\n");
+ 302   2          
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 6   
+
+ 303   2        } 
+ 304   1      }
+ 305          
+ 306          void OSDMenuAdj(unsigned char item,char dir)
+ 307          {
+ 308   1        unsigned char i;
+ 309   1      
+ 310   1        //if((highlight_flag[2]==3)||(highlight_flag[1]==3))
+ 311   1        if((item==1)&&(dir==1))
+ 312   1        {
+ 313   2          for(i=0;i<5;i++)
+ 314   2          {
+ 315   3            highlight_flag[i] = 2;
+ 316   3          }
+ 317   2          item_num++;
+ 318   2          if(item_num>4)
+ 319   2          item_num = 0;
+ 320   2          highlight_flag[item_num] = 5;
+ 321   2        }
+ 322   1        else if((item==1)&&(dir!=1))
+ 323   1        {
+ 324   2          for(i=0;i<5;i++)
+ 325   2          {
+ 326   3            highlight_flag[i] = 2;
+ 327   3          }
+ 328   2          if(item_num>0)
+ 329   2          item_num--;
+ 330   2          else
+ 331   2          item_num = 4;
+ 332   2          highlight_flag[item_num] = 5;
+ 333   2        }
+ 334   1        
+ 335   1        if(item==Bright_M)
+ 336   1        {
+ 337   2          Bright1T=Bright1T+dir;
+ 338   2          if(Bright1T>OSD_MAX)    Bright1T=OSD_MAX;
+ 339   2          if(Bright1T<OSD_MIN)    Bright1T=OSD_MIN;
+ 340   2        }
+ 341   1        else if(item==Contrast_M) 
+ 342   1        {
+ 343   2          ContrastT=ContrastT+dir;
+ 344   2          if(ContrastT>OSD_MAX) ContrastT=OSD_MAX;
+ 345   2          if(ContrastT<OSD_MIN) ContrastT=OSD_MIN;
+ 346   2          
+ 347   2        }
+ 348   1        else if(item==Color_M)
+ 349   1        {
+ 350   2          ColorT=ColorT+dir;
+ 351   2          if(ColorT>OSD_MAX)    ColorT=OSD_MAX;
+ 352   2          if(ColorT<OSD_MIN)    ColorT=OSD_MIN;
+ 353   2        }
+ 354   1        else if(item==Freq_M) /*to be achieved*/
+ 355   1        {
+ 356   2          //DBG_PRINT("highlight_flag[0] = %bd\r\n", highlight_flag[0]);
+ 357   2          
+ 358   2          if(highlight_flag[0]==1)
+ 359   2          {
+ 360   3            dur_cb_sc = 3; /*1KHz*/
+ 361   3            highlight_flag[0] = 2;
+ 362   3            highlight_flag[1] = 1;
+ 363   3            
+ 364   3          }
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 7   
+
+ 365   2          else
+ 366   2          {
+ 367   3            dur_cb_sc = 1; /*3KHz*/
+ 368   3            highlight_flag[0] = 1;
+ 369   3            highlight_flag[1] = 2;
+ 370   3          }
+ 371   2        }
+ 372   1        else if(item==Tel_M) /*to be achieved*/
+ 373   1        {
+ 374   2          //DBG_PRINT("highlight_flag[0] = %bd\r\n", highlight_flag[0]);
+ 375   2          
+ 376   2          if(highlight_flag[0]==1)
+ 377   2          {
+ 378   3            TEL0_FLAG = 0;
+ 379   3            TEL1_FLAG = 1; /*self test*/
+ 380   3            highlight_flag[0] = 2;
+ 381   3            highlight_flag[1] = 1;
+ 382   3            
+ 383   3          }
+ 384   2          else
+ 385   2          {
+ 386   3            TEL1_FLAG = 0;
+ 387   3            TEL0_FLAG = 1; /*line inject test*/
+ 388   3            highlight_flag[0] = 1;
+ 389   3            highlight_flag[1] = 2;
+ 390   3      
+ 391   3          }
+ 392   2        }
+ 393   1        DBG_PRINT("item = %bd\r\n", item);
+ 394   1        OSDShowMenu(item);
+ 395   1      }
+ 396          
+ 397          void OSDMenu_ctr(void)
+ 398          {
+ 399   1        
+ 400   1        if(MenuIndex==1)
+ 401   1        {
+ 402   2          switch(item_num)
+ 403   2          {
+ 404   3            case 0:
+ 405   3            /*video input test*/      
+ 406   3            VIDEO_FLAG = 1;
+ 407   3            OpenPanel();
+ 408   3            DBG_PRINT("VIDEO_FLAG = 1\r\n"); 
+ 409   3      
+ 410   3            #if 0
+                    highlight_flag[0] = 3;
+                    VIDEO_FLAG = ~VIDEO_FLAG;
+                    if(VIDEO_FLAG)
+                    DBG_PRINT("VIDEO_FLAG = 1\r\n");
+                    #endif
+ 416   3            
+ 417   3            MenuIndex = 6;
+ 418   3            break;
+ 419   3            case 1:
+ 420   3            /*seek cable*/
+ 421   3            CD4066_EN_FLAG = 1;
+ 422   3            highlight_flag[1] = 1;
+ 423   3            break;
+ 424   3            case 2:
+ 425   3            CD4017_EN_FLAG = 1;
+ 426   3            //CD4017_EN_FLAG = ~CD4017_EN_FLAG;
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 8   
+
+ 427   3            highlight_flag[2] = 1;
+ 428   3            #endif 
+*** WARNING C312 IN LINE 428 OF i51\page_RGB.c: misplaced endif control
+ 429   3            break;
+ 430   3            case 3:
+ 431   3              
+ 432   3            highlight_flag[0] = 1;
+ 433   3            highlight_flag[1] = 2;
+ 434   3      
+ 435   3            TEL1_FLAG = 0;
+ 436   3      
+ 437   3            TEL0_FLAG = 1;
+ 438   3            
+ 439   3            MenuIndex = 7;
+ 440   3      
+ 441   3            break;
+ 442   3            case 4:
+ 443   3            MenuIndex = 2;
+ 444   3            break;
+ 445   3            default:
+ 446   3      
+ 447   3            break;
+ 448   3          }
+ 449   2        }
+ 450   1        else
+ 451   1        if(MenuIndex==2)/*Brightness*/
+ 452   1        {MenuIndex = 3;}
+ 453   1        else
+ 454   1        if(MenuIndex==3)/*Contrast*/
+ 455   1        {MenuIndex = 4;}
+ 456   1        else
+ 457   1        if(MenuIndex==4)/*Color*/
+ 458   1        {MenuIndex = 5;}
+ 459   1        else
+ 460   1        if(MenuIndex==5)/*Freq*/
+ 461   1        {
+ 462   2          highlight_flag[0] = 2;
+ 463   2          highlight_flag[1] = 2;
+ 464   2          highlight_flag[2] = 2;
+ 465   2          highlight_flag[3] = 2;
+ 466   2          highlight_flag[4] = 5;
+ 467   2          
+ 468   2          MenuIndex = 1;
+ 469   2          tw_osd_clear_menu();//when come back to first page, need clean the old display.
+ 470   2        }
+ 471   1        else
+ 472   1        if(MenuIndex==6)/*Video*/
+ 473   1        {
+ 474   2          VIDEO_FLAG = 0;
+ 475   2      
+ 476   2          ClosePanel(0x1D, 0xF0, 0x6C);
+ 477   2          DBG_PRINT("VIDEO_FLAG = 0\r\n"); 
+ 478   2      
+ 479   2          MenuIndex = 1;
+ 480   2          tw_osd_clear_menu();//when come back to first page, need clean the old display.
+ 481   2        }
+ 482   1        else
+ 483   1        if(MenuIndex==7)/*Tel*/
+ 484   1        {
+ 485   2          TEL0_FLAG = 0;
+ 486   2          TEL1_FLAG = 0;
+ 487   2      
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 9   
+
+ 488   2          highlight_flag[0] = 2;
+ 489   2          highlight_flag[1] = 2;
+ 490   2          highlight_flag[2] = 2;
+ 491   2          highlight_flag[3] = 5;
+ 492   2          highlight_flag[4] = 2;
+ 493   2            
+ 494   2          MenuIndex = 1;
+ 495   2          tw_osd_clear_menu();//when come back to first page, need clean the old display.
+ 496   2        }
+ 497   1      
+ 498   1      #if 0
+                if(!m_bOSDEnable) 
+                {
+                  m_bOSDEnable=1;
+                  MenuIndex=0x01;
+                }
+                else MenuIndex++;
+                
+                if(MenuIndex>=End_Menu) 
+                {
+                  m_bOSDEnable=0;
+                  MenuIndex=0x00;
+                  osd_clear_block(0,16,48,2,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+                }
+                else  OSDShowMenu(MenuIndex);
+              #endif
+ 514   1        OSDShowMenu(MenuIndex);
+ 515   1        //DBG_PRINT("m_bOSDEnable = %x\n", (unsigned short)m_bOSDEnable);
+ 516   1        DBG_PRINT("MenuIndex = %x\n", (unsigned short)MenuIndex);
+ 517   1      }
+ 518          
+ 519          unsigned char page_RGB_process (TW_EVENT* event)
+ 520          {
+ 521   1        switch(event->type)
+ 522   1        {
+ 523   2          case TW_EVENT_TYPE_ENTER_SYSTEM:
+ 524   2            sosd_sp_disable();
+ 525   2            osd_disable();
+ 526   2            tw_emu_exit();
+ 527   2            tw_menu_draw(&page_rgb_osd2_0_menu);
+ 528   2            //tw_icons_draw(&page_rgb_rom_font_1);
+ 529   2            osd_enable();
+ 530   2            m_bOSDEnable = 0;
+ 531   2            MenuIndex = 0;
+ 532   2            Bright1T = 48;
+ 533   2            ContrastT = 50;
+ 534   2            ColorT = 52;
+ 535   2            IC_WritByte( TWIC_P0,0x69, Bright1T*2 + 28);
+ 536   2            IC_WritByte( TWIC_P0,0x68, ContrastT*2 + 28 );
+ 537   2            IC_WritByte( TWIC_P0,0x6c, ColorT*2 + 28 );
+ 538   2      
+ 539   2            tw_osd_clear_menu();//clean the display.
+ 540   2      
+ 541   2      #if 1   // 开机显示osd，不用是关闭该段代码
+ 542   2            m_bOSDEnable = 1;
+ 543   2            MenuIndex = 1;
+ 544   2            OSDShowMenu(MenuIndex);
+ 545   2            tw_timer_open(500);
+ 546   2      #endif
+ 547   2          break;
+ 548   2      
+ 549   2          case TW_EVENT_TYPE_QUIT_SYSTEM:
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 10  
+
+ 550   2          break;
+ 551   2      
+ 552   2          default:  /* put to nodify if no process this event */
+ 553   2            key = ReadKey();
+ 554   2            //DBG_PRINT("Key = %bd\n", key);
+ 555   2            if(!key)flagkey=1;  //判断按键是否弹起。
+ 556   2            
+ 557   2            if((kyDEC==key)||(kyADD==key)) // 这两个按键不弹起也强行使能,长按连续有效
+ 558   2            {
+ 559   3              twdDelay(600);    // 调节按键长按的反应速度
+ 560   3              flagkey=1;
+ 561   3            }
+ 562   2            
+ 563   2            if(flagkey && key ) //之前已经有释放 ，且按键有按下
+ 564   2            {
+ 565   3              flagkey=0;
+ 566   3              if(key<kyPWR)
+ 567   3              {
+ 568   4                osd_enable();
+ 569   4                tw_timer_open(500);
+ 570   4              }
+ 571   3              //DBG_PRINT("switch case Key value = %d\n", key);
+ 572   3              switch(key)
+ 573   3              {
+ 574   4                case kyMENU:
+ 575   4                  OSDMenu_ctr();
+ 576   4                  DBG_PRINT("Key = kyMENU \n");
+ 577   4                  break;
+ 578   4      
+ 579   4                case kyADD:
+ 580   4                  //DBG_PRINT("MenuIndex in Key scan = %bd\r\n", MenuIndex);
+ 581   4                  OSDMenuAdj(MenuIndex,1);
+ 582   4                  DBG_PRINT("Key = kyADD \n");
+ 583   4                  break;
+ 584   4      
+ 585   4                case kyDEC:
+ 586   4                  OSDMenuAdj(MenuIndex,-1);
+ 587   4                  DBG_PRINT("Key = kyDEC \n");
+ 588   4                  break;
+ 589   4                default:
+ 590   4                  DBG_PRINT("Key = default \n");
+ 591   4                  break;
+ 592   4              }
+ 593   3              IC_WritByte( TWIC_P0,0x69, Bright1T*2 + 28);
+ 594   3              IC_WritByte( TWIC_P0,0x68, ContrastT*2 + 28 );
+ 595   3              IC_WritByte( TWIC_P0,0x6c, ColorT*2 + 28 );
+ 596   3            }
+ 597   2            if(TW_TIMER_OUT_FLAG)
+ 598   2            {
+ 599   3              tw_timer_close();
+ 600   3              m_bOSDEnable=0;
+ 601   3              //MenuIndex=0x00;
+ 602   3              osd_disable();
+ 603   3              osd_clear_block(0,16,48,2,page_rgb_osd2_0_menu.addr,page_rgb_osd2_0_menu.width);
+ 604   3              osd_enable();
+ 605   3            }
+ 606   2      
+ 607   2            return TW_RETURN_NO_PROCESS;
+ 608   2        }
+ 609   1        return TW_RETURN_NONE;
+ 610   1      }
+
+C51 COMPILER V7.50   PAGE_RGB                                                              06/16/2017 08:24:42 PAGE 11  
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2647    ----
+   CONSTANT SIZE    =    461    ----
+   XDATA SIZE       =     13     126
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

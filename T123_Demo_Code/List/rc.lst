@@ -1,0 +1,1429 @@
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE RC
+OBJECT MODULE PLACED IN .\Object\rc.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\rc.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys
+                    -;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\rc.lst) TABS(2) OBJECT(.\Object\rc.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   resource.c
+   3           *  @brief  this header file put system interface initial function prototypeing
+   4           *  $Id: rc.c,v 1.12 2013/08/01 03:16:13 ken Exp $
+   5           *  $Author: ken $
+   6           *  $Revision: 1.12 $
+   7           *
+   8           *  Copyright (c) 2006 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2006/12/19  New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "spirw.h"
+  16          #include "rc.h"
+  17          
+  18          //#define TW_RC_DEBUG_MODE
+  19          
+  20          unsigned long code *_fresource = (unsigned long code*)(LAYOUT_RESSTART_ADDR);
+  21          //#define _eresource  0x000110D4L
+  22          
+  23          /*
+  24           *  SERACING FUNCTION
+  25           */
+  26          unsigned char DEF_SEARCHING= 0;
+  27          #define DEF_SEARCHING_FUNCTION
+  28          
+  29          #ifdef DEF_SEARCHING_FUNCTION
+  30          #define BINERY_VERSION
+  31          //#define FIBONACCI_VERSION
+  32          #endif
+  33          
+  34          #ifdef BINERY_VERSION
+  35          #undef FIBONACCI_VERSION
+  36          #endif
+  37          
+  38          #ifdef FIBONACCI_VERSION
+              #undef BINERY_VERSION
+              #endif  
+  41          
+  42          static struct res_t res_s;
+  43          static struct res_item_t desc_s;
+  44          
+  45          //#define DBG_RES_INFO
+  46          //#define OLD_TOOL_COMBINE
+  47          
+  48          #ifdef OLD_TOOL_COMBINE
+                #define RESOURCE_START_INDEX  0
+              #else
+  51            #define RESOURCE_START_INDEX  1
+  52          #endif
+  53          
+  54          /**
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 2   
+
+  55           * rc_init: init resource struct
+  56           * return > 0 number of elements
+  57           *        -1 invalid magic 
+  58           *        -2 invalid number of elements
+  59           *        -3 invalid pack struct
+  60           *        -4 invalid element struct
+  61           *        -5 invalid dma 2 xram
+  62           */
+  63          
+  64           /*
+  65           * Synopsis    int rc_init(void);
+  66           * Description  res初始化
+  67           * Return        0 number of elements
+  68           *              -1 invalid magic 
+  69           *              -2 invalid number of elements
+  70           *              -3 invalid pack struct
+  71           *              -4 invalid element struct
+  72           *              -5 invalid dma 2 xram
+  73           */
+  74          #ifdef OLD_TOOL_COMBINE
+              int rc_init(void)
+              {
+                  char rc= 0;
+                struct res_t *res = (struct res_t *) (*_fresource);
+                  //struct res_item_t desc_s;
+                  //void *pend = (void *) _eresource -4;
+                  int n;
+                unsigned long p_magic= 0;
+              
+                dbg(3, (" resource point = %p \r\n", res));
+              
+                  rc = spi_dma2xram((unsigned long)res, (unsigned short)(&res_s), RES_T_SIZE);
+                if(!rc)
+                  return -5;
+              
+                  dbg(3, (" resource magic = 0x%lX \r\n", res_s.resource_magic));
+                
+                if (res_s.resource_magic != RESOURCE_MAGIC)
+                      return -1;
+                
+                /* resource validation */
+                  if (res_s.nelements <= 0)
+                      return -2;
+              
+                  n = res_s.nelements;
+              
+                //rc = spi_dma2xram((unsigned long)&res->desc[n], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+                rc = spi_dma2xram((unsigned long)&res->desc[n+1], (unsigned short)(&p_magic), sizeof(unsigned long));
+                if(!rc)
+                  return -5;
+              
+              
+                //dbg(2, (" resource p = %p \r\n", (unsigned long *)(desc_s.offset + (char *)res)));
+                //dbg(2, (" resource pend = %p \r\n", pend));
+              
+                //rc = spi_dma2xram((unsigned long) (desc_s.offset + (char *)res), (unsigned short)(&p_magic), sizeof(uns
+             -igned long));
+                //rc = spi_dma2xram((unsigned long) (desc_s.offset), (unsigned short)(&p_magic), sizeof(unsigned long));
+                //if(!rc)
+                //  return -5;
+              
+                dbg(2, (" resource end magic = 0x%lX \r\n", p_magic));
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 3   
+
+              
+                  if (p_magic != RESOURCE_END_MAGIC) {
+                          return -3;
+                  }
+              
+              #if 0
+                  for (i = 0; i < n ; i++) {
+                  rc = spi_dma2xram((unsigned long)&res->desc[i], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+                  if(!rc)
+                    return -5;
+                      if ((desc_s.offset + (char *)res) >= (char *)pend)
+                          return -4;
+                  }
+              #endif
+              
+                  return n;
+              }
+              
+              #else
+ 135          int rc_init(unsigned short *n)
+ 136          {
+ 137   1          char rc= 0;
+ 138   1        struct res_t *res = (struct res_t *) (*_fresource);
+ 139   1        //struct res_item_t desc_s;
+ 140   1          //void *pend = (void *) _eresource -4;
+ 141   1        unsigned long p_magic= 0;
+ 142   1      
+ 143   1        desc_s.id = 0;
+ 144   1      
+ 145   1        dbg(3, (" resource point = %p \r\n", res));
+ 146   1      
+ 147   1          rc = spi_dma2xram((unsigned long)res, (unsigned short)(&res_s), RES_T_SIZE);
+ 148   1        if(!rc)
+ 149   1          return -5;
+ 150   1      
+ 151   1          dbg(3, (" resource magic = 0x%lX \r\n", res_s.resource_magic));
+ 152   1        
+ 153   1        if (res_s.resource_magic != RESOURCE_MAGIC)
+ 154   1              return -1;
+ 155   1        
+ 156   1        /* resource validation */
+ 157   1          if (res_s.nelements <= 0)
+ 158   1              return -2;
+ 159   1      
+ 160   1          *n = res_s.nelements;
+ 161   1      
+ 162   1        dbg(3, (" nelements = %u \r\n", res_s.nelements));
+ 163   1      
+ 164   1        //rc = spi_dma2xram((unsigned long)&res->desc[n], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+ 165   1        rc = spi_dma2xram((unsigned long)&res->desc[(*n)], (unsigned short)(&p_magic), 4);
+ 166   1        if(!rc)
+ 167   1          return -5;
+ 168   1      
+ 169   1      
+ 170   1        //dbg(3, (" resource p = %p \r\n", (unsigned long *)(desc_s.offset)));
+ 171   1        //dbg(2, (" resource pend = %p \r\n", pend));
+ 172   1      
+ 173   1        //rc = spi_dma2xram((unsigned long) (desc_s.offset + (char *)res), (unsigned short)(&p_magic), sizeof(uns
+             -igned long));
+ 174   1        //if(!rc)
+ 175   1        //  return -5;
+ 176   1      
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 4   
+
+ 177   1        dbg(3, (" resource end magic = 0x%lX \r\n", p_magic));
+ 178   1      
+ 179   1          DEF_SEARCHING= 0; // not is seraching function version
+ 180   1        
+ 181   1        if (p_magic != RESOURCE_END_MAGIC) {
+ 182   2            if (p_magic==RESOURCE_SEARCH_MAGIC)
+ 183   2            DEF_SEARCHING= 1; // seraching function version
+ 184   2          else
+ 185   2                return -3;
+ 186   2          }
+ 187   1      
+ 188   1      #if 0
+                  for (i = 0; i < n ; i++) {
+                  rc = spi_dma2xram((unsigned long)&res->desc[i], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+                  if(!rc)
+                    return -5;
+                      if ((desc_s.offset + (char *)res) >= (char *)pend)
+                          return -4;
+                  }
+              #endif
+ 197   1      
+ 198   1          return 0;
+ 199   1      }
+ 200          #endif
+ 201          
+ 202          /**
+ 203           *  get resource id key
+ 204           */
+ 205          
+ 206           /*
+ 207           * Synopsis    unsigned short get_id_key( unsigned short id);
+ 208           * Description  讀取 resource[id] 之id資?
+ 209           * Parameters   id                  - res index
+ 210           * Return       item id
+ 211           */
+ 212          unsigned short get_id_key(unsigned short id)
+ 213          {
+ 214   1          char rc= 0;
+ 215   1        struct res_t *res = (struct res_t *) (*_fresource);
+ 216   1        //struct res_item_t desc_s;
+ 217   1      
+ 218   1        if (res_s.resource_magic != RESOURCE_MAGIC) {
+ 219   2          ERROR(("invalid rc init!\r\n"));
+ 220   2          return NULL;
+ 221   2        }
+ 222   1          
+ 223   1        rc = spi_dma2xram((unsigned long)&res->desc[id], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+ 224   1          if(!rc) {
+ 225   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 226   2          return NULL;
+ 227   2        }
+ 228   1      
+ 229   1        return desc_s.id;
+ 230   1      }
+ 231          
+ 232          #ifdef BINERY_VERSION
+ 233          /**
+ 234           * Binary Searching
+ 235           */
+ 236          int b_searching(int low, int high, unsigned short id)
+ 237          {
+ 238   1        int i;
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 5   
+
+ 239   1      
+ 240   1        if(id< get_id_key(low) || id> get_id_key(high))
+ 241   1          return 0;
+ 242   1        while(low<=high) {
+ 243   2          i= (low+high)/2;
+ 244   2          if(id< get_id_key(i))
+ 245   2            high = i-1;
+ 246   2          else if(id> get_id_key(i))
+ 247   2              low= i+1;
+ 248   2          else
+ 249   2            return i;
+ 250   2        }
+ 251   1        
+ 252   1        return 0; 
+ 253   1      }
+ 254          #endif
+ 255          
+ 256          /**
+ 257           * Find Fibonacci i
+ 258           */
+ 259          #ifdef FIBONACCI_VERSION
+              int fibonacci(int i) //reentrant
+              {
+                int j= 0;
+                int n_1= 0, n_2= 0, n= 0;
+              
+                if(i==0) return (0);
+                else if(i==1) return (1);
+                //else return (fibonacci(i-1)+fibonacci(i-2));
+                else {
+                  n_2= 0;
+                  n_1= 1;
+                  for(j=2; j<=i; j++) {
+                    n = n_2+n_1;
+                    n_2 = n_1;
+                    n_1 = n;
+                  }
+                  return n;   
+                }
+              }
+              
+              /**
+               * Fibonacci Search
+               */
+              int f_searching(int n, unsigned short id)
+              {
+                int i, j, k, m, p, q;
+              
+                if(id< get_id_key(0) || id> get_id_key(n-1))
+                  return 0;
+              
+                for(k=0; fibonacci(k)< n+1; k++);
+                k--;
+                m= n+1 - fibonacci(k);
+              
+                i= fibonacci(k-1);
+                p= fibonacci(k-2);
+                q= fibonacci(k-3);
+              
+                if(id > get_id_key(i)) {
+              #ifdef DEBUG_FIBONACCI
+                  dbg(0, ("id: %u and rc[%d]=%u compare!\n", id, i, get_id_key(i)));
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 6   
+
+              #endif
+                  i= i+m;
+                }
+              
+                while(i>= 1) {
+                  if(id< get_id_key(i)) {
+              #ifdef DEBUG_FIBONACCI
+                    dbg(0, ("id: %u and rc[%d]=%u compare!\n", id, i, get_id_key(i)));
+              #endif
+                    if(q==0)
+                      i=0;
+                    else {
+                      i= i-q;
+                      j= p;
+                      p= q;
+                      q= j-q;
+                    }
+                  } else;
+              
+                  if(id> get_id_key(i)) {
+              #ifdef DEBUG_FIBONACCI      
+                    dbg(0, ("id: %u and rc[%d]=%u compare!\n", id, i, get_id_key(i)));
+              #endif
+                    if(p==1)
+                      i=0;
+                    else {
+                      i= i+q;
+                      p= p-q;
+                      q= q-p;
+                    }
+                  } else;
+              
+                  if(id == get_id_key(i)) { /* FIND */
+              #ifdef DEBUG_FIBONACCI      
+                    dbg(0, ("Find id: %u and rc[%d]=%u!\n", id, i, get_id_key(i)));
+              #endif
+                    return i;
+                  } else;
+                }
+                return (-1);
+              }
+              #endif
+ 343          
+ 344          
+ 345          /** 
+ 346           * rc_data(ID)
+ 347           */
+ 348          
+ 349           /*
+ 350           * Synopsis    unsigned long rc_data(unsigned short id);
+ 351           * Description  讀取 resource[id] 之item
+ 352           * Parameters   id                  - res index
+ 353           * Return       item 於xram之address
+ 354           */
+ 355          unsigned long rc_data(unsigned short id)
+ 356          {
+ 357   1          char rc= 0;
+ 358   1        struct res_t *res = (struct res_t *) (*_fresource);
+ 359   1        //struct res_item_t desc_s;
+ 360   1          int i, n;
+ 361   1      
+ 362   1        if (res_s.resource_magic != RESOURCE_MAGIC) {
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 7   
+
+ 363   2          ERROR(("invalid rc init!\r\n"));
+ 364   2          return NULL;
+ 365   2        }
+ 366   1          
+ 367   1          n = res_s.nelements;
+ 368   1      
+ 369   1        if(DEF_SEARCHING) {
+ 370   2      //  #ifdef DEF_SEARCHING_FUNCTION
+ 371   2          if (id == desc_s.id)
+ 372   2              return (unsigned long)((char *)res + desc_s.offset);
+ 373   2          
+ 374   2        #ifdef FIBONACCI_VERSION
+                  /* Fibonacci searching */
+                  i= f_searching(n, id);
+                #endif
+ 378   2        #ifdef BINERY_VERSION
+ 379   2          /* Binery searching */
+ 380   2          i= b_searching(0, n-1, id);
+ 381   2        #endif
+ 382   2          if(i>=0) {
+ 383   3            if (id == desc_s.id)
+ 384   3                    return (unsigned long)((char *)res + desc_s.offset);
+ 385   3          }
+ 386   2          ERROR(("NO ID!\r\n"));
+ 387   2          return NULL;
+ 388   2        } else {
+ 389   2      //  #else
+ 390   2            /* default searching */
+ 391   2          for (i = 0;i < n; i++) {
+ 392   3                rc = spi_dma2xram((unsigned long)&res->desc[i], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+ 393   3            if(!rc)
+ 394   3              goto EXIT;
+ 395   3            if (id == desc_s.id)
+ 396   3                    return (unsigned long)((char *)res + desc_s.offset);
+ 397   3            }
+ 398   2          ERROR(("NO ID!\r\n"));
+ 399   2        EXIT:
+ 400   2            if(!rc)
+ 401   2            ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 402   2          return NULL;
+ 403   2        }
+ 404   1      //  #endif    
+ 405   1      }
+ 406          
+ 407          /**
+ 408           * rc_type(ID)
+ 409           * return SUB_TYPE | TYPE
+ 410           *        < 0 id not found
+ 411           */
+ 412          
+ 413          /*
+ 414           * Synopsis    unsigned short rc_type(unsigned short id);
+ 415           * Description  讀取 resource[id] 之type
+ 416           * Parameters   id                  - res index
+ 417           * Return       item 之 SUB_TYPE | TYPE
+ 418           */
+ 419          unsigned short rc_type(unsigned short id)
+ 420          {
+ 421   1          char rc= 0;
+ 422   1        struct res_t *res = (struct res_t *) (*_fresource);
+ 423   1        //struct res_item_t desc_s;
+ 424   1          int i, n;
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 8   
+
+ 425   1      
+ 426   1          if (res_s.resource_magic != RESOURCE_MAGIC) {
+ 427   2          ERROR(("invalid rc init!\r\n"));
+ 428   2          return NULL;
+ 429   2        }
+ 430   1      
+ 431   1          n = res_s.nelements;
+ 432   1        if(DEF_SEARCHING) {
+ 433   2          if (id == desc_s.id)
+ 434   2              return desc_s.type | (desc_s.subtype << 16);
+ 435   2        #ifdef FIBONACCI_VERSION
+                  /* Fibonacci searching */
+                  i= f_searching(n, id);
+                #endif
+ 439   2        #ifdef BINERY_VERSION
+ 440   2          /* Binery searching */
+ 441   2          i= b_searching(0, n-1, id);
+ 442   2        #endif
+ 443   2          if(i>=0) {
+ 444   3            if (id == desc_s.id)
+ 445   3                    return desc_s.type | (desc_s.subtype << 16);
+ 446   3          }
+ 447   2          ERROR(("NO ID!\r\n"));
+ 448   2            return NULL;
+ 449   2        } else {
+ 450   2          for (i = 0;i < n; i++) {
+ 451   3                rc = spi_dma2xram((unsigned long)&res->desc[i], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+ 452   3                if(!rc)
+ 453   3              goto EXIT;
+ 454   3            if (id == desc_s.id)
+ 455   3                    return desc_s.type | (desc_s.subtype << 16);
+ 456   3            }
+ 457   2          ERROR(("NO ID!\r\n"));
+ 458   2        EXIT:
+ 459   2          if(!rc)
+ 460   2            ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 461   2            return NULL;
+ 462   2        }
+ 463   1      }
+ 464          
+ 465          /**
+ 466           * rc_len(ID)
+ 467           * return length
+ 468           */
+ 469          
+ 470          /*
+ 471           * Synopsis     unsigned long rc_len(unsigned short id);
+ 472           * Description  讀取 resource[id] 之資料長度
+ 473           * Parameters   id                  - res index
+ 474           * Return       item 之資料長度
+ 475           */
+ 476          unsigned long rc_len(unsigned short id)
+ 477          {
+ 478   1          char rc= 0;
+ 479   1        struct res_t *res = (struct res_t *) (*_fresource);
+ 480   1          struct res_item_t desc_s1;
+ 481   1          int i, n;
+ 482   1      
+ 483   1          if (res_s.resource_magic != RESOURCE_MAGIC) {
+ 484   2          ERROR(("invalid rc init!\r\n"));
+ 485   2          return NULL;
+ 486   2        }
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 9   
+
+ 487   1      
+ 488   1          n = res_s.nelements;
+ 489   1        if(DEF_SEARCHING) {
+ 490   2      //  #ifdef DEF_SEARCHING_FUNCTION
+ 491   2        #ifdef FIBONACCI_VERSION
+                  /* Fibonacci searching */
+                  i= f_searching(n, id);
+                #endif
+ 495   2        #ifdef BINERY_VERSION
+ 496   2          /* Binery searching */
+ 497   2          i= b_searching(0, n-1, id);
+ 498   2        #endif
+ 499   2          if(i>=0) {
+ 500   3            if (id == desc_s.id) {
+ 501   4              rc = spi_dma2xram((unsigned long)&res->desc[i+1], (unsigned short)(&desc_s1), RES_ITEM_T_SIZE);
+ 502   4                  if(!rc)
+ 503   4                goto EXIT;
+ 504   4        
+ 505   4              if(i==(n-1))
+ 506   4                return 16;
+ 507   4              else
+ 508   4                return (unsigned long)(desc_s1.offset - desc_s.offset);
+ 509   4                }
+ 510   3          }
+ 511   2        } else {
+ 512   2      //  #else
+ 513   2          for (i = 0;i < n; i++) {
+ 514   3                rc = spi_dma2xram((unsigned long)&res->desc[i], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+ 515   3                if(!rc)
+ 516   3              goto EXIT;
+ 517   3            if (id == desc_s.id) {
+ 518   4              rc = spi_dma2xram((unsigned long)&res->desc[i+1], (unsigned short)(&desc_s1), RES_ITEM_T_SIZE);
+ 519   4                  if(!rc)
+ 520   4                goto EXIT;
+ 521   4        
+ 522   4              if(i==(n-1))
+ 523   4                return 16;
+ 524   4              else
+ 525   4                return (unsigned long)(desc_s1.offset - desc_s.offset);
+ 526   4                }
+ 527   3            }
+ 528   2        }
+ 529   1      //  #endif
+ 530   1        ERROR(("NO ID!\r\n"));
+ 531   1      EXIT:
+ 532   1        if(!rc)
+ 533   1          ERROR(("DMA 2 XRAM FAILE!\r\n")); 
+ 534   1          return NULL;
+ 535   1      }
+ 536          
+ 537          /*
+ 538           * Synopsis     void get_res_img (unsigned short id, 
+ 539                                            struct res_img_t *img_s);
+ 540           * Description  讀取 img item
+ 541           * Parameters   id                  - item id
+ 542           *              img_s               - img物件
+ 543           * Return       none
+ 544           */
+ 545          void get_res_img (unsigned short id, struct res_img_t *img_s)
+ 546          {
+ 547   1        char rc= 0;
+ 548   1        unsigned char type= rc_type(id);
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 10  
+
+ 549   1        
+ 550   1        if(type!=TYPE_IMG) {
+ 551   2          ERROR(("Resource %u not is TYPE_IMG (1 != %bu)!\n", id, type));
+ 552   2          return;
+ 553   2        }
+ 554   1        
+ 555   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(img_s), RES_IMG_T_SIZE);
+ 556   1        if(!rc) {
+ 557   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 558   2          return;
+ 559   2        }
+ 560   1      
+ 561   1        (*img_s).lut_addr += (unsigned long)(*_fresource);
+ 562   1        (*img_s).index_addr += (unsigned long)(*_fresource);
+ 563   1      }
+ 564          
+ 565          /*
+ 566           * Synopsis     void get_res_img_by_addr ( unsigned short id, 
+ 567           *                                         struct res_img_t *img_s,
+ 568           *                                         unsigned long *addr); 
+ 569           * Description  讀取 td item
+ 570           * Parameters   id                  - item id
+ 571           *              img_s               - td物件
+ 572           *              addr                - item位址
+ 573           * Return       none
+ 574           */
+ 575          void get_res_img_by_addr (unsigned short id, struct res_img_t *img_s, unsigned long *addr)
+ 576          {
+ 577   1        char rc= 0;
+ 578   1        unsigned char type= 0;
+ 579   1        
+ 580   1        /* FIRST GET RESOURCE */
+ 581   1        if(*addr==0) {
+ 582   2          type= rc_type(id);
+ 583   2          if(type!=TYPE_IMG) {
+ 584   3            ERROR(("Resource %u not is TYPE_IMG (1 != %bu)!\n", id, type));
+ 585   3            return;
+ 586   3          }
+ 587   2          *addr = rc_data(id);      
+ 588   2        }
+ 589   1        
+ 590   1        rc = spi_dma2xram(*addr, (unsigned short)(img_s), RES_IMG_T_SIZE);
+ 591   1        if(!rc) {
+ 592   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 593   2          return;
+ 594   2        }
+ 595   1      
+ 596   1        (*img_s).lut_addr += (unsigned long)(*_fresource);
+ 597   1        (*img_s).index_addr += (unsigned long)(*_fresource);
+ 598   1      }
+ 599          
+ 600          /*
+ 601           * Synopsis     void get_res_spr ( unsigned short id, 
+ 602           *                                 struct res_spr_t *spr_s); 
+ 603           * Description  讀取 spr item
+ 604           * Parameters   id                  - item id
+ 605           *              spr_s               - spr物件
+ 606           * Return       none
+ 607           */
+ 608          void get_res_spr (unsigned short id, struct res_spr_t *spr_s)
+ 609          {
+ 610   1        char rc= 0;
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 11  
+
+ 611   1        unsigned char type= rc_type(id);
+ 612   1      
+ 613   1        if(type!=TYPE_SPRITE) {
+ 614   2          ERROR(("Resource %u not is TYPE_SPRITE (2 != %bu)!\n", id, type));
+ 615   2          return;
+ 616   2        }
+ 617   1        
+ 618   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(spr_s), RES_SPR_T_SIZE);
+ 619   1        if(!rc) {
+ 620   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 621   2          return;
+ 622   2        }
+ 623   1      
+ 624   1        (*spr_s).lut_addr += (unsigned long)(*_fresource);
+ 625   1        (*spr_s).index_addr += (unsigned long)(*_fresource);
+ 626   1      }
+ 627          
+ 628          /*
+ 629           * Synopsis     void get_res_emu ( unsigned short id, 
+ 630           *                                 struct res_emu_t *emu_s); 
+ 631           * Description  讀取 emu item
+ 632           * Parameters   id                  - item id
+ 633           *              emu_s               - emu物件
+ 634           * Return       none
+ 635           */
+ 636          void get_res_emu (unsigned short id, struct res_emu_t *emu_s)
+ 637          {
+ 638   1        char rc= 0;
+ 639   1        unsigned char type= rc_type(id);
+ 640   1        
+ 641   1        if(type!=TYPE_EMU) {
+ 642   2          ERROR(("Resource %u not is TYPE_EMU (3 != %bu)!\n", id, type));
+ 643   2          return;
+ 644   2        }
+ 645   1        
+ 646   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(emu_s), RES_EMU_T_SIZE);
+ 647   1        if(!rc) {
+ 648   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 649   2          return;
+ 650   2        }
+ 651   1      
+ 652   1        (*emu_s).base_addr += (unsigned long)(*_fresource);
+ 653   1      }
+ 654          
+ 655          /*
+ 656           * Synopsis     void get_res_menu ( unsigned short id, 
+ 657           *                                  struct res_menu_t *menu_s); 
+ 658           * Description  讀取 menu item
+ 659           * Parameters   id                  - item id
+ 660           *              menu_s              - menu物件
+ 661           * Return       none
+ 662           */
+ 663          void get_res_menu (unsigned short id, struct res_menu_t *menu_s)
+ 664          {
+ 665   1        char rc= 0;
+ 666   1        unsigned char type= rc_type(id);
+ 667   1        
+ 668   1        if(type!=TYPE_MENU) {
+ 669   2          ERROR(("Resource %u not is TYPE_MENU (4 != %bu)!\n", id, type));
+ 670   2          return;
+ 671   2        }
+ 672   1        
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 12  
+
+ 673   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(menu_s), RES_MENU_T_SIZE);
+ 674   1        if(!rc) {
+ 675   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 676   2          return;
+ 677   2        }
+ 678   1      
+ 679   1        (*menu_s).base_addr += (unsigned long)(*_fresource);
+ 680   1      }
+ 681          
+ 682          /*
+ 683           * Synopsis     void get_res_tile ( unsigned short id, 
+ 684           *                                  struct res_tile_t *tile_s); 
+ 685           * Description  讀取 tile item
+ 686           * Parameters   id                  - item id
+ 687           *              tile_s              - tile物件
+ 688           * Return       none
+ 689           */
+ 690          void get_res_tile (unsigned short id, struct res_tile_t *tile_s)
+ 691          {
+ 692   1        char rc= 0;
+ 693   1        unsigned char type= rc_type(id);
+ 694   1        
+ 695   1        if(type!=TYPE_TILE) {
+ 696   2          ERROR(("Resource %u not is TYPE_TILE (5 != %bu)!\n", id, type));
+ 697   2          return;
+ 698   2        }
+ 699   1        
+ 700   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(tile_s), RES_TILE_T_SIZE);
+ 701   1        if(!rc) {
+ 702   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 703   2          return;
+ 704   2        }
+ 705   1      
+ 706   1        (*tile_s).base_addr += (unsigned long)(*_fresource);
+ 707   1      }
+ 708          
+ 709          /*
+ 710           * Synopsis     void get_res_lut ( unsigned short id, 
+ 711           *                                 struct res_lut_t *lut_s); 
+ 712           * Description  讀取 lut item
+ 713           * Parameters   id                  - item id
+ 714           *              lut_s               - lut物件
+ 715           * Return       none
+ 716           */
+ 717          void get_res_lut (unsigned short id, struct res_lut_t *lut_s)
+ 718          {
+ 719   1        char rc= 0;
+ 720   1        unsigned char type= rc_type(id);
+ 721   1        
+ 722   1        if(type!=TYPE_LUT) {
+ 723   2          ERROR(("Resource %u not is TYPE_LUT (6 != %bu)!\n", id, type));
+ 724   2          return;
+ 725   2        }
+ 726   1        
+ 727   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(lut_s), RES_LUT_T_SIZE);
+ 728   1        if(!rc) {
+ 729   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 730   2          return;
+ 731   2        }
+ 732   1      
+ 733   1        (*lut_s).lut_addr += (unsigned long)(*_fresource);
+ 734   1      }
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 13  
+
+ 735          
+ 736          /*
+ 737           * Synopsis     void get_res_oreg ( unsigned short id, 
+ 738           *                                  struct res_oreg_t *oreg_s); 
+ 739           * Description  讀取 org item
+ 740           * Parameters   id                  - item id
+ 741           *              oreg_s              - org物件
+ 742           * Return       none
+ 743           */
+ 744          void get_res_oreg (unsigned short id, struct res_oreg_t *oreg_s)
+ 745          {
+ 746   1        char rc= 0;
+ 747   1        unsigned char type= rc_type(id);
+ 748   1        
+ 749   1        if(type!=TYPE_OREG) {
+ 750   2          ERROR(("Resource %u not is TYPE_OREG (7 != %bu)!\n", id, type));
+ 751   2          return;
+ 752   2        }
+ 753   1        
+ 754   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(oreg_s), RES_OREG_T_SIZE);
+ 755   1        if(!rc) {
+ 756   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 757   2          return;
+ 758   2        }
+ 759   1      
+ 760   1        (*oreg_s).base_addr += (unsigned long)(*_fresource);
+ 761   1      }
+ 762          
+ 763          /*
+ 764           * Synopsis     void get_res_icon ( unsigned short id, 
+ 765           *                                  struct res_icon_t *icon_s); 
+ 766           * Description  讀取 icon item
+ 767           * Parameters   id                  - item id
+ 768           *              icon_s              - icon物件
+ 769           * Return       none
+ 770           */
+ 771          void get_res_icon (unsigned short id, struct res_icon_t *icon_s)
+ 772          {
+ 773   1        char rc= 0;
+ 774   1        unsigned char type= rc_type(id);
+ 775   1        
+ 776   1        if(type!=TYPE_ICON) {
+ 777   2          ERROR(("Resource %u not is RES_ICON_T_SIZE (8 != %bu)!\n", id, type));
+ 778   2          return;
+ 779   2        }
+ 780   1        
+ 781   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(icon_s), RES_ICON_T_SIZE);
+ 782   1        if(!rc) {
+ 783   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 784   2          return;
+ 785   2        }
+ 786   1      
+ 787   1        (*icon_s).base_addr += (unsigned long)(*_fresource);
+ 788   1      }
+ 789          
+ 790          /*
+ 791           * Synopsis     void get_res_td ( unsigned short id, 
+ 792           *                                struct res_td_t *td_s); 
+ 793           * Description  讀取 td item
+ 794           * Parameters   id                  - item id
+ 795           *              td_s                - td物件
+ 796           * Return       none
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 14  
+
+ 797           */
+ 798          void get_res_td (unsigned short id, struct res_td_t *td_s)
+ 799          {
+ 800   1        char rc= 0;
+ 801   1        unsigned char type= rc_type(id);
+ 802   1        
+ 803   1        if(type!=TYPE_TD) {
+ 804   2          ERROR(("Resource %u not is TYPE_TD (9 != %bu)!\n", id, type));
+ 805   2          return;
+ 806   2        }
+ 807   1        
+ 808   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(td_s), RES_TD_T_SIZE);
+ 809   1        if(!rc) {
+ 810   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 811   2          return;
+ 812   2        }
+ 813   1      
+ 814   1        (*td_s).color_addr += (unsigned long)(*_fresource);
+ 815   1        (*td_s).index_addr += (unsigned long)(*_fresource);
+ 816   1      }
+ 817          
+ 818          /*
+ 819           * Synopsis     void get_res_td_by_addr ( unsigned short id, 
+ 820           *                                        struct res_td_t *td_s,
+ 821           *                                        unsigned long *addr); 
+ 822           * Description  讀取 td item
+ 823           * Parameters   id                  - item id
+ 824           *              td_s                - td物件
+ 825           *              addr                - item位址
+ 826           * Return       none
+ 827           */
+ 828          void get_res_td_by_addr (unsigned short id, struct res_td_t *td_s, unsigned long *addr)
+ 829          {
+ 830   1        char rc= 0;
+ 831   1        unsigned char type= 0;
+ 832   1        
+ 833   1        /* FIRST GET RESOURCE */
+ 834   1        if(*addr==0) {
+ 835   2          type= rc_type(id);
+ 836   2          if(type!=TYPE_TD) {
+ 837   3            ERROR(("Resource %u not is TYPE_TD (9 != %bu)!\n", id, type));
+ 838   3            return;
+ 839   3          }
+ 840   2          *addr = rc_data(id);      
+ 841   2        }
+ 842   1        
+ 843   1        rc = spi_dma2xram(*addr, (unsigned short)(td_s), RES_TD_T_SIZE);
+ 844   1        if(!rc) {
+ 845   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 846   2          return;
+ 847   2        }
+ 848   1      
+ 849   1        (*td_s).color_addr += (unsigned long)(*_fresource);
+ 850   1        (*td_s).index_addr += (unsigned long)(*_fresource);
+ 851   1      }
+ 852          
+ 853          /*
+ 854           * Synopsis     void get_res_tof ( unsigned short id, 
+ 855           *                                 struct res_tof_t *tof_s); 
+ 856           * Description  讀取 tof item
+ 857           * Parameters   id                  - item id
+ 858           *              tof_s               - tof物件
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 15  
+
+ 859           * Return       none
+ 860           */
+ 861          void get_res_tof (unsigned short id, struct res_tof_t *tof_s)
+ 862          {
+ 863   1        char rc= 0;
+ 864   1        unsigned char type= rc_type(id);
+ 865   1        
+ 866   1        if(type!=TYPE_TOFONT) {
+ 867   2          ERROR(("Resource %u is not TYPE_TOFONT (8 != %bu)!\n", id, type));
+ 868   2          return;
+ 869   2        }
+ 870   1                                            
+ 871   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(tof_s), RES_TOF_T_SIZE);
+ 872   1        if(!rc) {
+ 873   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 874   2          return;
+ 875   2        }
+ 876   1      
+ 877   1        //printf_tw("addr = %08lX, res_addr = %08lX\n", (*tof_s).base_addr, (unsigned long)*_fresource);
+ 878   1      
+ 879   1        (*tof_s).base_addr += (unsigned long)(*_fresource);
+ 880   1      }
+ 881          
+ 882          /*
+ 883           * Synopsis     void get_res_ch_icon ( unsigned short id, 
+ 884           *                                     struct res_ch_icon_t *ch_icon_s); 
+ 885           * Description  讀取 ch_icon item
+ 886           * Parameters   id                  - item id
+ 887           *              ch_icon_s           - ch_icon物件
+ 888           * Return       none
+ 889           */
+ 890          void get_res_ch_icon (unsigned short id, struct res_ch_icon_t *ch_icon_s)
+ 891          {
+ 892   1        char rc= 0;
+ 893   1        unsigned char type= rc_type(id);
+ 894   1        
+ 895   1        if(type!=TYPE_CH_ICON) {
+ 896   2          ERROR(("Resource %u not is TYPE_CH_ICON (11 != %bu)!\n", id, type));
+ 897   2          return;
+ 898   2        }
+ 899   1        
+ 900   1        rc = spi_dma2xram(rc_data(id), (unsigned short)(ch_icon_s), RES_CH_ICON_T_SIZE);
+ 901   1        if(!rc) {
+ 902   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+ 903   2          return;
+ 904   2        }
+ 905   1      
+ 906   1        (*ch_icon_s).base_addr += (unsigned long)(*_fresource);
+ 907   1      }
+ 908          
+ 909          
+ 910          #ifdef TW_RC_DEBUG_MODE
+              /*
+               * Synopsis     void show_img_info (unsigned long fp);
+               * Description  打印img物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_img_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_img_t img_s;
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 16  
+
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&img_s), RES_IMG_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                img_s.lut_addr += (unsigned long)(*_fresource);
+                img_s.index_addr += (unsigned long)(*_fresource);
+              
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : SOSD IMAGE\r\n");
+                DBG_PRINT("lut_addr  : 0x%lX\r\n", img_s.lut_addr);
+                DBG_PRINT("index_addr: 0x%lX\r\n", img_s.index_addr);
+                DBG_PRINT("line jump : %u\r\n", img_s.line_jump);
+                DBG_PRINT("width     : %u\r\n", img_s.width);
+                DBG_PRINT("height    : %u\r\n", img_s.height);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_spr_info (unsigned long fp);
+               * Description  打印spr物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_spr_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_spr_t spr_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&spr_s), RES_SPR_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                spr_s.lut_addr += (unsigned long)(*_fresource);
+                spr_s.index_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : SOSD SPRITE\r\n");
+                DBG_PRINT("lut_addr  : 0x%lX\r\n", spr_s.lut_addr);
+                DBG_PRINT("index_addr: 0x%lX\r\n", spr_s.index_addr);
+                DBG_PRINT("line jump : %u\r\n", spr_s.line_jump);
+                DBG_PRINT("width     : %bu\r\n", spr_s.width);
+                DBG_PRINT("height    : %u\r\n", spr_s.height);
+                DBG_PRINT("count     : %bu\r\n", spr_s.count);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_emu_info (unsigned long fp);
+               * Description  打印emu物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_emu_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_emu_t emu_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&emu_s), RES_EMU_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 17  
+
+                emu_s.base_addr += (unsigned long)(*_fresource);
+              
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : SOSD EMULATION\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", emu_s.base_addr);
+                DBG_PRINT("length    : %u\r\n", emu_s.length);
+                DBG_PRINT("repeat    : %bu\r\n", emu_s.repeat);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_menu_info (unsigned long fp);
+               * Description  打印menu物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_menu_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_menu_t menu_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&menu_s), RES_MENU_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                menu_s.base_addr += (unsigned long)(*_fresource);
+              
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 MENU\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", menu_s.base_addr);
+                DBG_PRINT("length    : %u\r\n", menu_s.length);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_tile_info (unsigned long fp);
+               * Description  打印tile物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_tile_info (unsigned long fp)
+              {
+              #ifdef NEW_TOOL_VERSION_RC
+                char rc= 0;
+                struct res_tile_t tile_s;
+                unsigned short temp= 0;
+                unsigned short i= 0;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&tile_s), RES_TILE_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                tile_s.base_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 TILE\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", tile_s.base_addr);
+                DBG_PRINT("length    : %u\r\n", tile_s.length);
+                DBG_PRINT("element   : ");
+                for(i= 0; i<tile_s.length; i++) {
+                  spi_dma2xram((tile_s.base_addr+(i*2)), (unsigned short)(&temp), sizeof(unsigned short));
+                  DBG_PRINT("%u, ", temp);    
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 18  
+
+                }
+                DBG_PRINT("\r\n");
+                DBG_PRINT("\r\n");
+              #else
+                char rc= 0;
+                struct res_tile_t tile_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&tile_s), RES_TILE_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 TILE\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", tile_s.base_addr);
+                DBG_PRINT("length    : %u\r\n", tile_s.length);
+                DBG_PRINT("\r\n");
+              #endif
+              }
+              
+              /*
+               * Synopsis     void show_ch_icon_info (unsigned long fp);
+               * Description  打印ch_icon物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_ch_icon_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_ch_icon_t ch_icon_s;
+                unsigned char i= 0;
+                unsigned short temp= 0;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&ch_icon_s), RES_CH_ICON_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                ch_icon_s.base_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 change ICON\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", ch_icon_s.base_addr);
+                DBG_PRINT("length    : %u\r\n", ch_icon_s.length);
+                DBG_PRINT("element   : ");
+                for(i= 0; i<ch_icon_s.length; i++) {
+                  spi_dma2xram((ch_icon_s.base_addr+(i*2)), (unsigned short)(&temp), sizeof(unsigned short));
+                  DBG_PRINT("%u, ", temp);    
+                }
+                DBG_PRINT("\r\n\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_lut_info (unsigned long fp);
+               * Description  打印lut物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_lut_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_lut_t lut_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&lut_s), RES_LUT_T_SIZE);
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 19  
+
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                lut_s.lut_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 LUT\r\n");
+                DBG_PRINT("lut_addr  : 0x%lX\r\n", lut_s.lut_addr);
+                DBG_PRINT("main_len  : %u\r\n", lut_s.main_len);
+                DBG_PRINT("sec_len   : %bu\r\n", lut_s.sec_len);
+                DBG_PRINT("re_2bp_len: %bu\r\n", lut_s.re_2bp_len);
+                DBG_PRINT("re_bg_len : %bu\r\n", lut_s.re_bg_len);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_oreg_info (unsigned long fp);
+               * Description  打印oreg物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_oreg_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_oreg_t oreg_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&oreg_s), RES_OREG_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                oreg_s.base_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 REG TABLE\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", oreg_s.base_addr);
+                DBG_PRINT("length    : %bu\r\n", oreg_s.length);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_icon_info (unsigned long fp);
+               * Description  打印icon物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_icon_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_icon_t icon_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&icon_s), RES_ICON_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                icon_s.base_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : OSD2 ICON TABLE\r\n");
+                DBG_PRINT("base_addr : 0x%lX\r\n", icon_s.base_addr);
+                DBG_PRINT("font_w  : %bu\r\n", icon_s.font_w);
+                DBG_PRINT("font_h    : %bu\r\n", icon_s.font_h);
+                DBG_PRINT("width     : %bu\r\n", icon_s.width);
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 20  
+
+                DBG_PRINT("height    : %bu\r\n", icon_s.height);
+                DBG_PRINT("bp      : %bu\r\n", icon_s.bp);
+                DBG_PRINT("count     : %bu\r\n", icon_s.count);
+                DBG_PRINT("\r\n");
+              }
+              
+              /*
+               * Synopsis     void show_td_info (unsigned long fp);
+               * Description  打印td物件資?
+               * Parameters   fp                  - item地址
+               * Return       none
+               */
+              void show_td_info (unsigned long fp)
+              {
+                char rc= 0;
+                struct res_td_t td_s;
+              
+                rc = spi_dma2xram(fp, (unsigned short)(&td_s), RES_TD_T_SIZE);
+                if(!rc)
+                  ERROR(("DMA 2 XRAM FAILE!\r\n"));
+              
+                td_s.color_addr += (unsigned long)(*_fresource);
+                td_s.index_addr += (unsigned long)(*_fresource);
+                
+                DBG_PRINT("[resource header]\n");
+                DBG_PRINT("type      : SOSD TD\r\n");
+                DBG_PRINT("color_addr: 0x%lX\r\n", td_s.color_addr);
+                DBG_PRINT("index_addr: 0x%lX\r\n", td_s.index_addr);
+                DBG_PRINT("line jump : %u\r\n", td_s.line_jump);
+                DBG_PRINT("width     : %u\r\n", td_s.width);
+                DBG_PRINT("height    : %u\r\n", td_s.height);
+                DBG_PRINT("\r\n");
+              }
+              #endif
+1203          
+1204          /*
+1205           * Synopsis     void show_resource_header (unsigned short res_id);
+1206           * Description  打印物件資?
+1207           * Parameters   res_id                  - 物件id
+1208           * Return       none
+1209           */
+1210          void show_resource_header (unsigned short res_id)
+1211          {
+1212   1        unsigned long fp;
+1213   1        unsigned short type= 0;
+1214   1        
+1215   1        type = rc_type(res_id);
+1216   1      
+1217   1        DBG_PRINT("rc_id   : %u\n", res_id);
+1218   1        DBG_PRINT("rc_type   : %d\n", type);
+1219   1        DBG_PRINT("rc_len    : %ld bytes\n", rc_len(res_id));
+1220   1      
+1221   1        fp = rc_data(res_id);
+1222   1      
+1223   1      #ifdef TW_RC_DEBUG_MODE
+                switch(type) {
+                  case TYPE_IMG:
+                    show_img_info(fp);
+                    break;
+                  
+                  case TYPE_SPRITE:
+                    show_spr_info(fp);
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 21  
+
+                    break;
+                  
+                  case TYPE_EMU:
+                    show_emu_info(fp);
+                    break;
+                  
+                  case TYPE_MENU:
+                    show_menu_info(fp);
+                    break;
+              
+                  case TYPE_TILE:
+                    show_tile_info(fp);
+                    break;
+                  
+                  case TYPE_LUT:
+                    show_lut_info(fp);
+                    break;
+              
+                  case TYPE_OREG:
+                    show_oreg_info(fp);
+                    break;
+                  
+                  case TYPE_ICON:
+                    show_icon_info(fp);
+                    break;
+              
+                  case TYPE_TD:
+                    show_td_info(fp);
+                    break;  
+                  
+                  default:
+                    ERROR(("type error!\r\n"));
+                    break;
+                }
+              #endif
+1266   1      
+1267   1      }
+1268          
+1269          #ifndef OLD_TOOL_COMBINE
+1270          /**
+1271           * get_res_id(e)
+1272           * return res ID
+1273           *        = 0 error
+1274           */
+1275          
+1276          /*
+1277           * Synopsis     unsigned short get_res_id(unsigned short e);
+1278           * Description  讀取 res_item[e] 之id資?
+1279           * Parameters   e                 - res_item index
+1280           * Return       res_item id, 0 ->error
+1281           */
+1282          unsigned short get_res_id(unsigned short e)
+1283          {
+1284   1          char rc= 0;
+1285   1        struct res_t *res = (struct res_t *) (*_fresource);
+1286   1        struct res_item_t desc_s;
+1287   1          unsigned short n;
+1288   1      
+1289   1          if (res_s.resource_magic != RESOURCE_MAGIC) {
+1290   2          ERROR(("invalid rc init!\r\n"));
+1291   2          return 0;
+1292   2        }
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 22  
+
+1293   1      
+1294   1          n = res_s.nelements;
+1295   1      
+1296   1        if((e>n)||(e==0)) {
+1297   2          ERROR(("invalid number of elements!\r\n"));
+1298   2          return 0;
+1299   2        }
+1300   1      
+1301   1        rc = spi_dma2xram((unsigned long)&res->desc[e-1], (unsigned short)(&desc_s), RES_ITEM_T_SIZE);
+1302   1          if(!rc) {
+1303   2          ERROR(("DMA 2 XRAM FAILE!\r\n"));
+1304   2          return 0;
+1305   2        }
+1306   1        
+1307   1        return desc_s.id;
+1308   1      }
+1309          #endif
+1310          
+1311          /*
+1312           * Synopsis     void resource_init (void);
+1313           * Description  resource系統初始化
+1314           * Return       none
+1315           */
+1316          void resource_init (void)
+1317          {
+1318   1        unsigned short i=0;
+1319   1        unsigned short n=0;
+1320   1      
+1321   1        int rc= 0;
+1322   1      
+1323   1        rc = rc_init(&n);
+1324   1        
+1325   1        if (rc==-1)
+1326   1          ERROR(("invalid magic!\r\n"));
+1327   1        else if (rc==-2)
+1328   1          ERROR(("invalid number of elements!\r\n"));
+1329   1        else if (rc==-3)
+1330   1          ERROR(("invalid pack struct!\r\n"));
+1331   1        else if (rc==-4)
+1332   1          ERROR(("invalid element struct!\r\n"));
+1333   1        else if (rc==-5)
+1334   1          ERROR(("invalid dma 2 xram!\r\n"));
+1335   1      //  else {
+1336   1      //    ERROR(("rc init faile!\r\n"));  
+1337   1      //    return;
+1338   1      //  }
+1339   1      
+1340   1        if (n>0) {
+1341   2          DBG_PRINT("rc init success!\r\n");
+1342   2          DBG_PRINT("number of elements is %d \r\n", n);
+1343   2      
+1344   2      #ifdef DBG_RES_INFO
+                #ifdef OLD_TOOL_COMBINE
+                  for(i=0; i<n; i++)
+                    show_resource_header(i);
+                #else
+                  for(i=1; i<=n; i++)
+                    show_resource_header(get_res_id(i));
+                #endif
+              #endif
+1353   2        } else
+1354   1          ERROR(("no resource elements!\r\n")); 
+C51 COMPILER V7.50   RC                                                                    06/16/2017 08:24:36 PAGE 23  
+
+1355   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   6875    ----
+   CONSTANT SIZE    =    916    ----
+   XDATA SIZE       =     25     188
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

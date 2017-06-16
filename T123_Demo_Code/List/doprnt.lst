@@ -1,0 +1,559 @@
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE DOPRNT
+OBJECT MODULE PLACED IN .\Object\doprnt.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\doprnt.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib
+                    -\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\doprnt.lst) TABS(2) OBJECT(.\Object\doprnt.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   doprnt.c
+   3           *  @brief  
+   4           *  $Id: doprnt.c,v 1.3 2013/01/28 11:19:42 ken Exp $
+   5           *  $Author: ken $
+   6           *  $Revision: 1.3 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2012/02/29  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include <stdio.h>
+  15          #include <stdarg.h>
+  16          #include <string.h>
+  17          #include <ctype.h>
+  18          #include "config.h"
+  19          #include "serial.h"
+  20          #include "doprnt.h"
+  21          
+  22          /*
+  23           * Cx51 Data Types
+  24           *
+  25           *        Type          Byte             Value Range
+  26           * -------------------  ----    -----------------------------
+  27           *   signed char           1             -128 ~          +127
+  28           * unsigned char           1                0 ~           255
+  29           *   signed short (int)    2           -32768 ~        +32767
+  30           * unsigned short (int)    2                0 ~         65535
+  31           *   signed int            2           -32768 ~        +32767
+  32           * unsigned int            2                0 ~         65535
+  33           *   signed long (int)     4      -2147483648 ~   +2147483647
+  34           * unsigned long (int)     4                0 ~    4294967295
+  35           *    float/double         4    -3.402823E+38 ~ +3.402823E+38 (max/min)
+  36           *                              -1.175494E-38 ~ +1.175494E-38 (precision)
+  37           */
+  38          
+  39          /*
+  40           * Because Keil C doesn't apply ANSI default argument promotions with
+  41           * functions, which is called with a varying number of arguments of
+  42           * varying types, the function arguments should be casted manually.
+  43           * Accroding to the K&R C standard, default argument promotion rule
+  44           * is that all char(s) and short(s) are widened to int(s), and all
+  45           * float(s) are widened to double(s).
+  46           *
+  47           * To display value of 'char':
+  48           *           -128 as   signed char  >> printf ("%bd\n", (char)-128);
+  49           *            127 as   signed char  >> printf ("%bd\n", (char)127);
+  50           *              0 as unsigned char  >> printf ("%bu\n", (char)0);
+  51           *            255 as unsigned char  >> printf ("%bu\n", (char)255);
+  52           *
+  53           * To display value of 'short':
+  54           *         -32768 as   signed short >> printf ("%hd\n", (short)-32768);
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 2   
+
+  55           *          32767 as   signed short >> printf ("%hd\n", (short)32767);
+  56           *              0 as unsigned short >> printf ("%hu\n", (short)0);
+  57           *          65535 as unsigned short >> printf ("%hu\n", (short)65535);
+  58           *
+  59           * To display value of 'int':
+  60           *         -32768 as   signed int   >> printf ("%d\n",  (int)-32768);
+  61           *          32767 as   signed int   >> printf ("%d\n",  (int)32767);
+  62           *              0 as unsigned int   >> printf ("%u\n",  (int)0);
+  63           *          65535 as unsigned int   >> printf ("%u\n",  (int)65535);
+  64           *
+  65           * To display value of 'long':
+  66           *    -2147483648 as   signed long  >> printf ("%ld\n", (long)-2147483648);
+  67           *     2147483647 as   signed long  >> printf ("%ld\n", (long)2147483647);
+  68           *              0 as unsigned long  >> printf ("%lu\n", (long)0);
+  69           *     4294967295 as unsigned long  >> printf ("%lu\n", (long)4294967295);
+  70           */
+  71          
+  72          /*
+  73           * FIXME printf_tw() don't support float/double.
+  74           */
+  75          
+  76          typedef unsigned char uchar;
+  77          typedef unsigned long ulong;
+  78          
+  79          #define LONGINT     0x01    /* long integer */
+  80          #define LONGDBL     0x02    /* long double; unimplemented */
+  81          #define SHORTINT    0x04    /* short integer */
+  82          #define ALT         0x08    /* alternate form */
+  83          #define LADJUST     0x10    /* left adjustment */
+  84          #define ZEROPAD     0x20    /* zero (as opposed to blank) pad */
+  85          #define HEXPREFIX   0x40    /* add 0x or 0X prefix */
+  86          #define BYTEINT     0x80    /* short integer */
+  87          
+  88          #define ARG(signedtype) _ulong = ((flags & LONGINT) ? (signedtype long) va_arg (argp, long) : ((flags & SH
+             -ORTINT) ? (signedtype short) va_arg (argp, short) : ((flags & BYTEINT)  ? (signedtype char) va_arg (argp, char) : (signe
+             -dtype int) va_arg (argp, int))))
+  89          
+  90          #define todigit(c)  ((c) - '0')
+  91          #define tochar(c) ((c) + '0')
+  92          #define isascii(c)  ((c) < 128)
+  93          
+  94          #define BUFSIZE     16
+  95          
+  96          
+  97          #define FPREC   2
+  98          #define MOD     1000
+  99          
+ 100          #ifdef DEBUG_MODE
+ 101          int
+ 102          printf_tw (const char *fmt, ...)
+ 103          {
+ 104   1          const uchar *ptr;   /* format string */
+ 105   1          char *t;            /* buffer pointer */
+ 106   1          double _double;     /* double precision arguments %[eEfgG] */
+ 107   1          ulong _ulong;       /* integer arguments %[diouxX] */
+ 108   1          char cnt;           /* return value accumulator */
+ 109   1          char n;             /* random handy integer */
+ 110   1          char base;          /* base for [diouxX] conversion */
+ 111   1          char dprec;         /* decimal precision in [diouxX] */
+ 112   1          char fieldsz;       /* field size expanded by sign, etc */
+ 113   1          char flags;         /* flags as above */
+ 114   1          char prec;          /* precision from format (%.3d), or -1 */
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 3   
+
+ 115   1          char realsz;        /* field size expanded by decimal precision */
+ 116   1          char size;          /* size of converted field or string */
+ 117   1          char width;         /* width from format (%8d), or 0 */
+ 118   1          char sign;          /* sign prefix (' ', '+', '-', or \0) */
+ 119   1          const char *digs;   /* digits for [diouxX] conversion */
+ 120   1          char buf[BUFSIZE];  /* space for %c, %[diouxX], %[eEfgG] */
+ 121   1      
+ 122   1          va_list argp;
+ 123   1          va_start(argp, fmt);
+ 124   1      #ifdef I2C_DEBUG_MODE
+                i2c_count=0x00;
+              #endif
+ 127   1          cnt = 0;
+ 128   1          for (ptr = (const uchar *)fmt; *ptr != '\0'; ptr++) {
+ 129   2              if (*ptr != '%') {
+ 130   3                  putb_t (*ptr);
+ 131   3                  cnt++;
+ 132   3                  continue;
+ 133   3              }
+ 134   2      
+ 135   2              n = 0;
+ 136   2              flags = 0;
+ 137   2              dprec = 0;
+ 138   2              /* fpprec = 0; */
+ 139   2              width = 0;
+ 140   2              prec = -1;
+ 141   2              sign = '\0';
+ 142   2      
+ 143   2              digs = "0123456789abcdef";
+ 144   2      rflag:
+ 145   2              switch (*++ptr) {
+ 146   3                  case ' ':
+ 147   3                      /*
+ 148   3                       * ``If the space and + flags both appear, the space
+ 149   3                       * flag will be ignored.''
+ 150   3                       *  -- ANSI X3J11
+ 151   3                       */
+ 152   3                      if (!sign) {
+ 153   4                          sign = ' ';
+ 154   4                      }
+ 155   3                      goto rflag;
+ 156   3      
+ 157   3                  case '#':
+ 158   3                      flags |= ALT;
+ 159   3                      goto rflag;
+ 160   3                  case '*':
+ 161   3                      /*
+ 162   3                       * ``A negative field width argument is taken as a
+ 163   3                       * - flag followed by a  positive field width.''
+ 164   3                       *  -- ANSI X3J11
+ 165   3                       * They don't exclude field widths read from args.
+ 166   3                       */
+ 167   3                      if ((width = va_arg (argp, int)) >= 0) {
+ 168   4                          goto rflag;
+ 169   4                      }
+ 170   3                      width = -width;
+ 171   3                      /* FALLTHROUGH */
+ 172   3                  case '-':
+ 173   3                      flags |= LADJUST;
+ 174   3                      goto rflag;
+ 175   3                  case '+':
+ 176   3                      sign = '+';
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 4   
+
+ 177   3                      goto rflag;
+ 178   3                  case '.':
+ 179   3                      if (*++ptr == '*') {
+ 180   4                          n = va_arg (argp, int);
+ 181   4                      } else {
+ 182   4                          n = 0;
+ 183   4                          while (isascii (*ptr) && isdigit (*ptr)) {
+ 184   5                              n = 10 * n + todigit (*ptr++);
+ 185   5                          }
+ 186   4                          --ptr;
+ 187   4                      }
+ 188   3                      prec = n < 0 ? -1 : n;
+ 189   3                      goto rflag;
+ 190   3                  case '0':
+ 191   3                      /*
+ 192   3                       * ``Note that 0 is taken as a flag, not as the
+ 193   3                       * beginning of a field width.''
+ 194   3                       *  -- ANSI X3J11
+ 195   3                       */
+ 196   3                      flags |= ZEROPAD;
+ 197   3                      goto rflag;
+ 198   3                  case '1':
+ 199   3                  case '2':
+ 200   3                  case '3':
+ 201   3                  case '4':
+ 202   3                  case '5':
+ 203   3                  case '6':
+ 204   3                  case '7':
+ 205   3                  case '8':
+ 206   3                  case '9':
+ 207   3                      n = 0;
+ 208   3                      while (isascii (*ptr) && isdigit (*ptr)) {
+ 209   4                          n = 10 * n + todigit (*ptr++);
+ 210   4                      }
+ 211   3                      --ptr;
+ 212   3                      width = n;
+ 213   3                      goto rflag;
+ 214   3      #if 0
+                          case 'L':
+                              flags |= LONGDBL;
+                              goto rflag;
+              #endif
+ 219   3                  case 'h':
+ 220   3                      flags |= SHORTINT;
+ 221   3                      goto rflag;
+ 222   3                  case 'l':
+ 223   3                      flags |= LONGINT;
+ 224   3                      goto rflag;
+ 225   3                  case 'b':
+ 226   3                      flags |= BYTEINT;
+ 227   3                      goto rflag;
+ 228   3                  case 'c':
+ 229   3                      *(t = buf) = va_arg (argp, int);
+ 230   3                      // egg responsc: when he printed '\0', the string was breaked
+ 231   3                      // while other systems don't.
+ 232   3                      if ((*t) == '\0')
+ 233   3                          *t = ' ';
+ 234   3                      size = 1;
+ 235   3                      sign = '\0';
+ 236   3                      goto pforw;
+ 237   3      
+ 238   3                  case 'D':
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 5   
+
+ 239   3                      flags |= LONGINT;
+ 240   3                      /* FALLTHROUGH */
+ 241   3                  case 'd':
+ 242   3                  case 'i':
+ 243   3                      ARG (signed);
+ 244   3                      if ((long) _ulong < 0) {
+ 245   4                          _ulong = -_ulong;
+ 246   4                          sign = '-';
+ 247   4                      }
+ 248   3                      base = 10;
+ 249   3                      goto number;
+ 250   3                  case 'n':
+ 251   3                      if (flags & LONGINT) {
+ 252   4                          *va_arg (argp, long *) = cnt;
+ 253   4                      } else if (flags & SHORTINT) {
+ 254   4                          *va_arg (argp, short *) = cnt;
+ 255   4                      } else {
+ 256   4                          *va_arg (argp, int *) = cnt;
+ 257   4                      }
+ 258   3                      break;
+ 259   3                  case 'f':
+ 260   3                      _double = va_arg (argp, double);
+ 261   3                      if (_double < 0) {
+ 262   4                          _double = -_double;
+ 263   4                          sign = '-';
+ 264   4                      }
+ 265   3                      goto fpoint;
+ 266   3                  case 'O':
+ 267   3                      flags |= LONGINT;
+ 268   3                      /* FALLTHROUGH */
+ 269   3                  case 'o':
+ 270   3                      ARG (unsigned);
+ 271   3                      base = 8;
+ 272   3                      goto nosign;
+ 273   3                  case 'p':
+ 274   3                      /*
+ 275   3                       * ``The argument shall be a pointer to void.  The
+ 276   3                       * value of the pointer is converted to a sequence
+ 277   3                       * of printable characters, in an implementation-
+ 278   3                       * defined manner.''
+ 279   3                       *  -- ANSI X3J11
+ 280   3                       */
+ 281   3                      /* NOSTRICT */
+ 282   3                      _ulong = (ulong) va_arg (argp, void *);
+ 283   3                      width = 8;
+ 284   3                      base = 16;
+ 285   3                      flags |= (ZEROPAD | HEXPREFIX);
+ 286   3                      goto nosign;
+ 287   3                  case 's':
+ 288   3                      if (!(t = va_arg (argp, char *))) {
+ 289   4                          t = "(null)";
+ 290   4                      }
+ 291   3                      if (prec >= 0) {
+ 292   4                          /*
+ 293   4                           * can't use strlen; can only look for the
+ 294   4                           * NUL in the first `prec' characters, and
+ 295   4                           * strlen() will go further.
+ 296   4                           */
+ 297   4                          char *p;
+ 298   4      
+ 299   4                          if ((p = memchr (t, 0, prec)) != NULL) {
+ 300   5                              size = p - t;
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 6   
+
+ 301   5                              if (size > prec) {
+ 302   6                                  size = prec;
+ 303   6                              }
+ 304   5                          } else {
+ 305   5                              size = prec;
+ 306   5                          }
+ 307   4                      } else {
+ 308   4                          size = strlen (t);
+ 309   4                      }
+ 310   3                      sign = '\0';
+ 311   3                      goto pforw;
+ 312   3                  case 'U':
+ 313   3                      flags |= LONGINT;
+ 314   3                      /* FALLTHROUGH */
+ 315   3                  case 'u':
+ 316   3                      ARG (unsigned);
+ 317   3                      base = 10;
+ 318   3                      goto nosign;
+ 319   3                  case 'X':
+ 320   3                      digs = "0123456789ABCDEF";
+ 321   3                      /* FALLTHROUGH */
+ 322   3                  case 'x':
+ 323   3                      ARG (unsigned);
+ 324   3                      base = 16;
+ 325   3                      /*
+ 326   3                       * leading 0x/X only if non-zero
+ 327   3                       */
+ 328   3                      if (flags & ALT && _ulong != 0) {
+ 329   4                          flags |= HEXPREFIX;
+ 330   4                      }
+ 331   3      
+ 332   3                      /*
+ 333   3                       * unsigned conversions
+ 334   3                       */
+ 335   3      nosign:
+ 336   3                      sign = '\0';
+ 337   3                      /*
+ 338   3                       * ``... diouXx conversions ... if a precision is
+ 339   3                       * specified, the 0 flag will be ignored.''
+ 340   3                       *  -- ANSI X3J11
+ 341   3                       */
+ 342   3      number:
+ 343   3                      if ((dprec = prec) >= 0) {
+ 344   4                          flags &= ~ZEROPAD;
+ 345   4                      }
+ 346   3      
+ 347   3                      /*
+ 348   3                       * ``The result of converting a zero value with an
+ 349   3                       * explicit precision of zero is no characters.''
+ 350   3                       *  -- ANSI X3J11
+ 351   3                       */
+ 352   3                      t = buf + BUFSIZE;  /* let t point to end of buf */
+ 353   3                      if (_ulong != 0 || prec != 0) {
+ 354   4                          do {
+ 355   5                              *--t = digs[_ulong % base];
+ 356   5                              _ulong /= base;
+ 357   5                          } while (_ulong);
+ 358   4                          if (flags & ALT && base == 8 && *t != '0') {
+ 359   5                              *--t = '0'; /* octal leading 0 */
+ 360   5                          }
+ 361   4                      }
+ 362   3                      size = buf + BUFSIZE - t;
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 7   
+
+ 363   3                      goto pforw;
+ 364   3      
+ 365   3      fpoint:
+ 366   3                      /*
+ 367   3                       * floating point converting
+ 368   3                       */
+ 369   3                      t = buf + BUFSIZE;
+ 370   3      
+ 371   3                      /* fraction */
+ 372   3                      _ulong = (ulong)(_double * MOD) % MOD;
+ 373   3                      _ulong = (_ulong / 10) + (_ulong % 10 > 5 ? 1 : 0); /* round off */
+ 374   3                      for (n = 0; n < FPREC; n++) {
+ 375   4                          *--t = (_ulong % 10) + '0';
+ 376   4                          _ulong /= 10;
+ 377   4                      }
+ 378   3      
+ 379   3                      /* point */
+ 380   3                      *--t = '.';
+ 381   3      
+ 382   3                      /* decimal */
+ 383   3                      _ulong = _double;
+ 384   3                      do {
+ 385   4                          *--t = (_ulong % 10) + '0';
+ 386   4                          _ulong /= 10;
+ 387   4                      } while (_ulong);
+ 388   3      
+ 389   3                      size = buf + BUFSIZE - t;
+ 390   3      
+ 391   3      pforw:
+ 392   3                      /*
+ 393   3                       * All reasonable formats wind up here.  At this point,
+ 394   3                       * `t' points to a string which (if not flags&LADJUST)
+ 395   3                       * should be padded out to `width' places.  If
+ 396   3                       * flags&ZEROPAD, it should first be prefixed by any
+ 397   3                       * sign or other prefix; otherwise, it should be blank
+ 398   3                       * padded before the prefix is emitted.  After any
+ 399   3                       * left-hand padding and prefixing, emit zeroes
+ 400   3                       * required by a decimal [diouxX] precision, then print
+ 401   3                       * the string proper, then emit zeroes required by any
+ 402   3                       * leftover floating precision; finally, if LADJUST,
+ 403   3                       * pad with blanks.
+ 404   3                       */
+ 405   3      
+ 406   3                      /*
+ 407   3                       * compute actual size, so we know how much to pad
+ 408   3                       * fieldsz excludes decimal prec; realsz includes it
+ 409   3                       */
+ 410   3                      fieldsz = size + 0 /* fpprec */ ;
+ 411   3                      realsz = dprec > fieldsz ? dprec : fieldsz;
+ 412   3                      if (sign) {
+ 413   4                          realsz++;
+ 414   4                      }
+ 415   3      
+ 416   3                      if (flags & HEXPREFIX) {
+ 417   4                          realsz += 2;
+ 418   4                      }
+ 419   3      
+ 420   3                      /*
+ 421   3                       * right-adjusting blank padding
+ 422   3                       */
+ 423   3                      if ((flags & (LADJUST | ZEROPAD)) == 0 && width) {
+ 424   4                          for (n = realsz; n < width; n++) {
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 8   
+
+ 425   5                              putb_t (' ');
+ 426   5                          }
+ 427   4                      }
+ 428   3      
+ 429   3                      /*
+ 430   3                       * prefix
+ 431   3                       */
+ 432   3                      if (sign) {
+ 433   4                          putb_t (sign);
+ 434   4                      }
+ 435   3                      if (flags & HEXPREFIX) {
+ 436   4                          putb_t ('0');
+ 437   4                          putb_t ('x');
+ 438   4                      }
+ 439   3      
+ 440   3                      /*
+ 441   3                       * right-adjusting zero padding
+ 442   3                       */
+ 443   3                      if ((flags & (LADJUST | ZEROPAD)) == ZEROPAD) {
+ 444   4                          for (n = realsz; n < width; n++) {
+ 445   5                              putb_t ('0');
+ 446   5                          }
+ 447   4                      }
+ 448   3      
+ 449   3      
+ 450   3                      /*
+ 451   3                       * leading zeroes from decimal precision
+ 452   3                       */
+ 453   3                      for (n = fieldsz; n < dprec; n++) {
+ 454   4                          putb_t ('0');
+ 455   4                      }
+ 456   3      
+ 457   3                      /*
+ 458   3                       * Check if we're doing fp - we may need to do some
+ 459   3                       * awkward padding for e/E and some g/G formats
+ 460   3                       */
+ 461   3      
+ 462   3                      {
+ 463   4                          /*
+ 464   4                           * copy the string or number proper
+ 465   4                           */
+ 466   4                          int i;
+ 467   4                          for (i = 0; i < size; i++)
+ 468   4                              putb_t (t[i]);
+ 469   4                      }
+ 470   3      
+ 471   3      
+ 472   3      
+ 473   3                      /*
+ 474   3                       * left-adjusting padding (always blank)
+ 475   3                       */
+ 476   3                      if (flags & LADJUST) {
+ 477   4                          for (n = realsz; n < width; n++) {
+ 478   5                              putb_t (' ');
+ 479   5                          }
+ 480   4                      }
+ 481   3      
+ 482   3                      /*
+ 483   3                       * finally, adjust cnt
+ 484   3                       */
+ 485   3                      cnt += width > realsz ? width : realsz;
+ 486   3                      break;
+C51 COMPILER V7.50   DOPRNT                                                                06/16/2017 08:24:35 PAGE 9   
+
+ 487   3                  case '\0':             /* "%?" prints ?, unless ? is NULL */
+ 488   3                      goto EXIT;
+ 489   3                  default:
+ 490   3                      putb_t (*ptr);
+ 491   3                      cnt++;
+ 492   3              }
+ 493   2          }
+ 494   1      
+ 495   1      EXIT:
+ 496   1          va_end (argp);
+ 497   1        #ifdef I2C_DEBUG_MODE
+                putb_t('\n');
+                i2c_count=0x00;
+                #endif
+ 501   1          return cnt;
+ 502   1      }
+ 503          #else
+              
+              int
+              no_printf (const char *fmt, ...)
+              {
+                const uchar *ptr = (const uchar *)fmt;
+                
+                return 0;
+              }
+              #endif
+ 513          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2859    ----
+   CONSTANT SIZE    =     41    ----
+   XDATA SIZE       =   ----      93
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

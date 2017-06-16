@@ -1,0 +1,1 @@
+const char code ver[] = {0x00, 0x00}; //ver0.0

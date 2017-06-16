@@ -1,0 +1,124 @@
+C51 COMPILER V7.50   CHECK_EVENT                                                           06/16/2017 08:24:32 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE CHECK_EVENT
+OBJECT MODULE PLACED IN .\Object\check_event.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\check_event.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\s
+                    -ys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\check_event.lst) TABS(2) OBJECT(.\Object\check_event.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   check_event.c
+   3           *  @brief  check event queue
+   4           *  $Id: check_event.c,v 1.2 2012/12/04 03:11:46 kevin Exp $
+   5           *  $Author: kevin $
+   6           *  $Revision: 1.2 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "config.h"
+  15          #include "sys.h"
+  16          #include "tw_widget_sys.h"
+  17          #include "serial.h"
+  18          #include "timer.h"
+  19          #include "tw_timer.h"
+  20          #include "check_event.h"
+  21          #include "videodetect.h"
+  22          #include "panel.h"
+  23          #include "sarkey.h"
+  24          #include "nvp6124.h"
+  25          #include "video.h"
+  26          //#include "mcu_if.h"
+  27          
+  28          void check_event(void)
+  29          {
+  30   1          TW_EVENT s_event;
+  31   1          unsigned char rc=0x00;
+  32   1          unsigned char ir=0x00;
+  33   1          unsigned char sar=0x00;
+  34   1          unsigned char uart=0x00;
+  35   1          static unsigned char signal_active=0;
+  36   1          static unsigned char signal_std=0;
+  37   1          nvp6124_input_videofmt pvideofmt={0};
+  38   1      
+  39   1          rc=uartevent(&uart);
+  40   1          if(rc!=0)
+  41   1          {
+  42   2            s_event.type=TW_EVENT_TYPE_UART;
+  43   2            s_event.uart.ch=uart;
+  44   2            put_event(&s_event);
+  45   2            //DBG_PRINT("uart=%d\r\n",(int)uart);   
+  46   2          }
+  47   1      
+  48   1          rc = SARscan(&sar);
+  49   1          if(rc != 0)
+  50   1          {
+  51   2              s_event.type = TW_EVENT_TYPE_KEY_DOWN;
+  52   2            s_event.keystroke.ch = sar;
+  53   2            put_event(&s_event);
+  54   2          }
+C51 COMPILER V7.50   CHECK_EVENT                                                           06/16/2017 08:24:32 PAGE 2   
+
+  55   1      
+  56   1          if(TIMER0_OUT_FLAG)
+  57   1          {
+  58   2            TIMER0_OUT_FLAG=0;
+  59   2            s_event.type = TW_EVENT_TYPE_TIMEOUT;
+  60   2            s_event.timer.tid = 0;
+  61   2            put_event(&s_event);
+  62   2          }
+  63   1          
+  64   1          if(TIMER1_OUT_FLAG)
+  65   1          {
+  66   2            TIMER1_OUT_FLAG=0;
+  67   2            s_event.type = TW_EVENT_TYPE_TIMEOUT;
+  68   2            s_event.timer.tid = 1;
+  69   2            put_event(&s_event);
+  70   2          }
+  71   1      
+  72   1          if(TW_TIMER_OUT_FLAG)
+  73   1          {
+  74   2            TW_TIMER_OUT_FLAG=0;
+  75   2            s_event.type = TW_EVENT_TYPE_TIMEOUT;
+  76   2            s_event.timer.tid = 2;
+  77   2            put_event(&s_event);
+  78   2          }
+  79   1          video_fmt_det(&pvideofmt);
+  80   1          SingalDetect();
+  81   1          if((sigstate.SigActive!=signal_active)||((sigstate.SigActive==Signal_Set)&&(sigstate.SigStd!=signal_std)
+             -))
+  82   1          {
+  83   2            s_event.type=TW_EVENT_TYPE_SINGNAL;
+  84   2            signal_active=sigstate.SigActive;
+  85   2            signal_std=sigstate.SigStd;
+  86   2            s_event.signal.SigActive=sigstate.SigActive;
+  87   2            s_event.signal.SigSrc=sigstate.SigSrc;
+  88   2            s_event.signal.SigStd=sigstate.SigStd;
+  89   2            put_event(&s_event);
+  90   2            dbg(2, ("1.SIGNAL ACT=%bd SRC=%bd STD=%bd\r\n",s_event.signal.SigActive,s_event.signal.SigSrc,s_event.s
+             -ignal.SigStd));
+  91   2          }
+  92   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    267    ----
+   CONSTANT SIZE    =    131    ----
+   XDATA SIZE       =      2      75
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

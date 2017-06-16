@@ -1,0 +1,185 @@
+C51 COMPILER V7.50   INTERRUPT                                                             06/16/2017 08:24:32 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE INTERRUPT
+OBJECT MODULE PLACED IN .\Object\interrupt.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\interrupt.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys
+                    -;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\interrupt.lst) TABS(2) OBJECT(.\Object\interrupt.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   interrupt.c
+   3           *  @brief  i8051 interrupt entry
+   4           *  $Id: interrupt.c,v 1.2 2012/12/04 03:11:46 kevin Exp $
+   5           *  $Author: kevin $
+   6           *  $Revision: 1.2 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include <reg51.h>
+  15          #include "sys.h"
+  16          #include "ir.h"
+  17          #include "serial.h"
+  18          #include "sarkey.h"
+  19          #include "gpio.h"
+  20          #include "timer.h"
+  21          #include "cq.h"
+  22          #include "tw_timer.h"
+  23          #include "tw_irq.h"
+  24          
+  25          #define ENABLE    1
+  26          #define DISABLE   0
+  27          
+  28          void TIMER0_INT(void) interrupt 1
+  29          {
+  30   1        TR0=DISABLE;  // disable Timer0 INT 
+  31   1      
+  32   1        TL0=TIMER0_COUNT&0x00FF;
+  33   1        TH0=TIMER0_COUNT>>8;
+  34   1      
+  35   1        TIMER0_CN++;
+  36   1        if(TIMER0_CN>=TIMER0_OUT)
+  37   1        {
+  38   2          TIMER0_CN=0;
+  39   2          TIMER0_OUT_FLAG=1;
+  40   2        }
+  41   1      
+  42   1      #if 0
+                if(SarRepeat)
+                {
+                  sarcount++;
+                  if(sarcount==255)
+                  {
+                    CheckSAR();
+                    sarcount=0;
+                  }
+                }
+              #endif
+  53   1      
+  54   1        TR0=ENABLE;   // enable Timer0 INT
+C51 COMPILER V7.50   INTERRUPT                                                             06/16/2017 08:24:32 PAGE 2   
+
+  55   1      }
+  56          
+  57          void TIMER1_INT(void) interrupt 3
+  58          { 
+  59   1        TR1=DISABLE;  // disable Timer1 INT 
+  60   1      
+  61   1        TL1=TIMER1_COUNT&0x00FF;
+  62   1        TH1=TIMER1_COUNT>>8;
+  63   1      
+  64   1        TIMER1_CN++;
+  65   1        if(TIMER1_CN>=TIMER1_OUT)
+  66   1        {
+  67   2          TIMER1_CN=0;
+  68   2          TIMER1_OUT_FLAG=1;
+  69   2        }
+  70   1      
+  71   1        TR1=ENABLE;   // enable Timer1 INT    
+  72   1      }
+  73          
+  74          void EXTERNAL_INT(void) interrupt 0
+  75          {
+  76   1        unsigned char data irq_nr=0;
+  77   1        unsigned short data irq_flag;
+  78   1          
+  79   1        /* Need check this function if use command queue */
+  80   1        if (cq_busy ())
+  81   1          return;
+  82   1      
+  83   1        /* Disable External Interrupt */
+  84   1        EX0 = DISABLE;
+  85   1      
+  86   1        irq_flag = tw_irq_dispatch();
+  87   1        
+  88   1        //INFO(("EXTERNAL INTERRUPT STATUS: 0x%X\n", irq_flag));
+  89   1      
+  90   1        for(irq_nr=0; irq_nr<IRQ_TOTAL_NUM; irq_nr++)
+  91   1        {
+  92   2          if(!(irq_flag&(1<<irq_nr)))
+  93   2            continue;   
+  94   2          
+  95   2          switch(irq_nr) {
+  96   3            case IRQ_VSYNC_MISS:
+  97   3              break;
+  98   3            
+  99   3            case IRQ_HSYNC_MISS:
+ 100   3              break;
+ 101   3            
+ 102   3            case IRQ_VSYNC_CHG:
+ 103   3              break;
+ 104   3            
+ 105   3            case IRQ_HSYNC_CHG:
+ 106   3              break;
+ 107   3            
+ 108   3            case IRQ_10MS_TIME:
+ 109   3              tw_timer_isr();
+ 110   3              break;
+ 111   3            
+ 112   3            case IRQ_SPI_DMA:
+ 113   3              break;
+ 114   3            
+ 115   3            case IRQ_IR_PACKET:
+ 116   3              //CheckIR();
+C51 COMPILER V7.50   INTERRUPT                                                             06/16/2017 08:24:32 PAGE 3   
+
+ 117   3              break;
+ 118   3            
+ 119   3            case IRQ_SAR0_TOGGLE: 
+ 120   3              
+ 121   3              break;
+ 122   3            
+ 123   3            case IRQ_SAR1_TOGGLE:
+ 124   3              CheckSAR();
+ 125   3              break;
+ 126   3            
+ 127   3            case IRQ_SHORT_VS:
+ 128   3              break;
+ 129   3            
+ 130   3            case IRQ_SHDN_WAR:
+ 131   3              break;
+ 132   3            
+ 133   3            case IRQ_UART0_INT:
+ 134   3              getuart();
+ 135   3              break;
+ 136   3            
+ 137   3            case IRQ_UART1_INT:
+ 138   3              //uart1_recv();
+ 139   3              //getuart1();
+ 140   3              break;
+ 141   3            
+ 142   3            case IRQ_GPIO_INT:
+ 143   3              break;
+ 144   3            
+ 145   3            case IRQ_CQ_INT:
+ 146   3              cq_isr ();
+ 147   3              break;
+ 148   3          }
+ 149   2        }
+ 150   1        
+ 151   1        /* Enable External Interrupt */
+ 152   1        EX0 = ENABLE;
+ 153   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    408    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,145 @@
+C51 COMPILER V7.50   PAGE_RGB_STRUCT                                                       06/16/2017 08:24:42 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE PAGE_RGB_STRUCT
+OBJECT MODULE PLACED IN .\Object\page_RGB_struct.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE i51\page_RGB_struct.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;
+                    -..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\page_RGB_struct.lst) TABS(2) OBJECT(.\Object\page_RGB_struct.obj)
+
+line level    source
+
+   1          #include "sys.h"
+   2          #include "tw_widget_sys.h"
+   3          #include "res.h"
+   4          #include "page_RGB.h"
+   5          
+   6          struct tw_td code layout_1_rgb = {
+   7              ID_LAYOUT_1_RGB, 0, 0, 320, 240
+   8          };
+   9          
+  10          #if 0
+              struct tw_menu code page_rgb_osd2_0_menu = {
+                  ID_OSD2_0_MENU,
+                  ID_OSD2_0_TILES,
+                  ID_OSD2_0_LUT,
+                  ID_OSD2_0_ORG,
+                  0Xffff,
+                  0,
+                  0,
+                  27,
+                  14,
+                  15947,
+                  12,
+                  18,
+              };
+              #endif
+  26          
+  27          struct tw_menu code page_rgb_osd2_0_menu = {
+  28              ID_OSD2_0_MENU,
+  29              ID_OSD2_0_TILES,
+  30              ID_OSD2_0_LUT,
+  31              ID_OSD2_0_ORG,
+  32              0Xffff,
+  33              0,
+  34              0,
+  35              27,
+  36              14,
+  37              15947,
+  38              12,
+  39              18,
+  40          };
+  41          
+  42          
+  43          
+  44          unsigned char code page_rgb_rom_font_1_ids[] = {
+  45            13, 14, };
+  46          
+  47          struct tw_icons code page_rgb_rom_font_1 = {
+  48            0,
+  49            1,
+  50            0,
+  51            0,
+  52            2,
+  53            1,
+  54            (unsigned char*)page_rgb_rom_font_1_ids,
+C51 COMPILER V7.50   PAGE_RGB_STRUCT                                                       06/16/2017 08:24:42 PAGE 2   
+
+  55            2,
+  56          };
+  57          
+  58          unsigned char code page_rgb_rom_font_2_ids[] = {
+  59            15, 16, };
+  60          
+  61          struct tw_icons code page_rgb_rom_font_2 = {
+  62            0,
+  63            2,
+  64            24,
+  65            0,
+  66            2,
+  67            1,
+  68            (unsigned char*)page_rgb_rom_font_2_ids,
+  69            2,
+  70          };
+  71          
+  72          unsigned char code page_rgb_rom_font_3_ids[] = {
+  73            19, 20, };
+  74          
+  75          struct tw_icons code page_rgb_rom_font_3 = {
+  76            0,
+  77            3,
+  78            0,
+  79            12,
+  80            2,
+  81            1,
+  82            (unsigned char*)page_rgb_rom_font_3_ids,
+  83            2,
+  84          };
+  85          
+  86          unsigned char code page_rgb_rom_font_4_ids[] = {
+  87            38, };
+  88          
+  89          struct tw_icons code page_rgb_rom_font_4 = {
+  90            0,
+  91            4,
+  92            25,
+  93            12,
+  94            1,
+  95            1,
+  96            (unsigned char*)page_rgb_rom_font_4_ids,
+  97            2,
+  98          };
+  99          
+ 100          unsigned char code page_rgb_rom_font_5_ids[] = {
+ 101            3, };
+ 102          
+ 103          struct tw_icons code page_rgb_rom_font_5 = {
+ 104            0,
+ 105            5,
+ 106            3,
+ 107            0,
+ 108            1,
+ 109            1,
+ 110            (unsigned char*)page_rgb_rom_font_5_ids,
+ 111            2,
+ 112          };
+ 113          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+C51 COMPILER V7.50   PAGE_RGB_STRUCT                                                       06/16/2017 08:24:42 PAGE 3   
+
+   CODE SIZE        =   ----    ----
+   CONSTANT SIZE    =     96    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

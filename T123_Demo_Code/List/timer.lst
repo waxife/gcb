@@ -1,0 +1,135 @@
+C51 COMPILER V7.50   TIMER                                                                 06/16/2017 08:24:31 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE TIMER
+OBJECT MODULE PLACED IN .\Object\timer.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\timer.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..\
+                    -tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\timer.lst) TABS(2) OBJECT(.\Object\timer.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   timer.c
+   3           *  @brief  i8051 timer handling
+   4           *  $Id: timer.c,v 1.2 2012/12/04 03:11:46 kevin Exp $
+   5           *  $Author: kevin $
+   6           *  $Revision: 1.2 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include <reg51.h>
+  15          #include "timer.h"
+  16          
+  17          #define ENABLE    1
+  18          #define DISABLE   0
+  19          
+  20          bit TIMER0_OUT_FLAG=0;
+  21          bit TIMER1_OUT_FLAG=0;
+  22          unsigned long data TIMER0_OUT=0;
+  23          unsigned long data TIMER1_OUT=0;
+  24          unsigned long data TIMER0_CN=0;
+  25          unsigned long data TIMER1_CN=0;
+  26          unsigned short data TIMER0_COUNT=0;
+  27          unsigned short data TIMER1_COUNT=0;
+  28          
+  29          /* timer0 initial */
+  30          void timer0_init(unsigned short timerData)
+  31          {
+  32   1        TIMER0_COUNT = timerData;
+  33   1        TL0=TIMER0_COUNT&0x00FF;
+  34   1        TH0=TIMER0_COUNT>>8;
+  35   1      }
+  36          
+  37          /* timer0 open */
+  38          void tr0_open(unsigned long count)
+  39          {
+  40   1        TIMER0_OUT=count;
+  41   1        TIMER0_CN=0;
+  42   1        TIMER0_OUT_FLAG=0;
+  43   1        tr0_cut_start();  
+  44   1      }
+  45          
+  46          /* timer0 close */
+  47          void tr0_close(void)
+  48          {
+  49   1        TIMER0_OUT=0;
+  50   1        TIMER0_CN=0;
+  51   1        TIMER0_OUT_FLAG=0;
+  52   1        tr0_cut_stop(); 
+  53   1      }
+  54          
+C51 COMPILER V7.50   TIMER                                                                 06/16/2017 08:24:31 PAGE 2   
+
+  55          /* timer0 count start */
+  56          void tr0_cut_start(void)
+  57          {
+  58   1        TR0=ENABLE;
+  59   1      }
+  60          
+  61          /* timer0 count stop */
+  62          void tr0_cut_stop(void)
+  63          {
+  64   1        TR0=DISABLE;
+  65   1      }
+  66          
+  67          /* timer1 initial */
+  68          void timer1_init(unsigned short timerData)
+  69          {
+  70   1        TIMER1_COUNT = timerData;
+  71   1        TL1=TIMER1_COUNT&0x00FF;
+  72   1        TH1=TIMER1_COUNT>>8;
+  73   1      }
+  74          
+  75          /* timer1 open */
+  76          void tr1_open(unsigned long count)
+  77          {
+  78   1        TIMER1_OUT=count;
+  79   1        TIMER1_CN=0;
+  80   1        TIMER1_OUT_FLAG=0;
+  81   1        tr1_cut_start();  
+  82   1      }
+  83          
+  84          /* timer1 close */
+  85          void tr1_close(void)
+  86          {
+  87   1        TIMER1_OUT=0;
+  88   1        TIMER1_CN=0;
+  89   1        TIMER1_OUT_FLAG=0;
+  90   1        tr1_cut_stop(); 
+  91   1      }
+  92          
+  93          /* timer1 count start */
+  94          void tr1_cut_start(void)
+  95          {
+  96   1        TR1=ENABLE;
+  97   1      }
+  98          
+  99          /* timer1 count stop */
+ 100          void tr1_cut_stop(void)
+ 101          {
+ 102   1        TR1=DISABLE;
+ 103   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    124    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     20    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+C51 COMPILER V7.50   TIMER                                                                 06/16/2017 08:24:31 PAGE 3   
+
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

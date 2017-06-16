@@ -1,0 +1,1 @@
+"SourceFile\twbc_layout_struct.c" LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..\tw_lib\drivers) DEFINE (T123AI) DEBUG PRINT(.\List\twbc_layout_struct.lst) OBJECT(.\Object\twbc_layout_struct.obj)

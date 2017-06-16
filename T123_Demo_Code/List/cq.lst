@@ -1,0 +1,1398 @@
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE CQ
+OBJECT MODULE PLACED IN .\Object\cq.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\cq.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys
+                    -;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\cq.lst) TABS(2) OBJECT(.\Object\cq.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   cq.c
+   3           *  @brief  command queue driver
+   4           *  $Id: cq.c,v 1.7 2013/02/18 08:10:30 ken Exp $
+   5           *  $Author: ken $
+   6           *  $Revision: 1.7 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/10/31  hugo  New file.
+  11           *          2012/05/21  hugo    improved v2
+  12           *
+  13           */
+  14          
+  15          #include <string.h>
+  16          #include "sys.h"
+  17          #include "reg_tw.h"
+  18          #include "iccontrol.h"
+  19          #include "cq.h"
+  20          
+  21          #ifdef CQ_ENABLE_INT
+  22          #include "tw_irq.h"
+  23          #endif
+  24          
+  25          /* Platform */
+  26          //#define CONFIG_EAGLE    // config for Eagle
+  27          #define CONFIG_THETIS   // config for Thetis
+  28          
+  29          //#define CQ_DEBUG
+  30          
+  31          static unsigned char cq_status;                 /* interrupt status */
+  32          static unsigned char cq_wlen;                   /* length to write */
+  33          static unsigned char cq_size;                   /* current queue size */
+  34          static unsigned char cq_size_last;              /* last queue size */
+  35          static unsigned char cq_debug;                  /* debug options */
+  36          
+  37          static unsigned char xdata CQ_INT_MASK;         /* interrupt_mask */
+  38          static unsigned char xdata CQ_TRIGGER_SRC;      /* trigger source */
+  39          static unsigned char xdata CQ_TRIGGER_TIMEOUT;  /* trigger timeout */
+  40          static unsigned char xdata CQ_TRIGGER_ADJ_L;    /* trigger delay low byte */
+  41          static unsigned char xdata CQ_TRIGGER_ADJ_H;    /* trigger delay hi byte */
+  42          
+  43          #define CQ_MAX_SIZE (128 - 1)
+  44          
+  45          #define MIN(X,Y)    ((X) < (Y) ? (X) : (Y))
+  46          #define MAX(X,Y)    ((X) > (Y) ? (X) : (Y))
+  47          
+  48          struct cmdhdr {
+  49              unsigned char page;
+  50              unsigned char addr;
+  51              unsigned char incr;
+  52              unsigned int size;
+  53          };
+  54          
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 2   
+
+  55          struct regval {
+  56              unsigned char addr;
+  57              unsigned char value;
+  58          };
+  59          
+  60          /*
+  61           * Elements of Command Queue
+  62           *
+  63           * 2-byte command (write 1 ~ 8 byte)
+  64           *  Byte    Bit     Description
+  65           *  0       [7]     2/3-byte command, 0:2-byte, 1:3-byte
+  66           *          [6]     Incr., 0:repeat address, 1: incremental address
+  67           *          [5:3]   Page
+  68           *          [2:0]   Length (=L)
+  69           *  1       [7:0]   Initial Address
+  70           *  2+0             Data(0)
+  71           *  ...             ...
+  72           *  2+L             Data(L)
+  73           *
+  74           * 3-byte command (write 1 ~ 125(=128-3) byte)
+  75           *  Byte    Bit     Description
+  76           *  0       [7]     2/3-byte command, 0:2-byte, 1:3-byte
+  77           *          [6]     Incr., 0:repeat address, 1: incremental address
+  78           *          [5:3]   Page
+  79           *          [2:0]   (TBD)
+  80           *  1       [7:0]   Length (=L)
+  81           *  2       [7:0]   Initial Address
+  82           *  3+0             Data(0)
+  83           *  ...             ...
+  84           *  3+L             Data(L)
+  85           */
+  86          
+  87          /*
+  88           * P3_C0            General Setting
+  89           *  [7]     W       Software reset to all registers in this module
+  90           *  [1]     R/W     Debug Mode. Set ‘1’ to read SRAM data from data port.
+  91           *  [0]     R/W     CQ_locked. Lock command queue (cannot be issued)
+  92           */
+  93          #define CQ_SOFTWARE_RESET       (1 << 7)
+  94          
+  95          #ifndef CQ_DEBUG
+  96          #define CQ_SETTING_SET(VAL)     do { IC_WritByte (TWIC_P3, 0xC0, VAL); } while (0)
+  97          #else
+              #define CQ_SETTING_SET(VAL)     do { IC_WritByte (TWIC_P3, 0xC0, VAL); if ((cq_debug & CQ_DEBUG_SET_REG)) 
+             -DBG_PRINT ("P3_C0=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 100          
+ 101          /*
+ 102           * P3_C1            Interrupt Mask
+ 103           *  [3]     R/W     Command queue overflow
+ 104           *  [2]     R/W     Wait trigger signal time-out
+ 105           *  [1]     R/W     Invalid command
+ 106           *  [0]     R/W     Command queue done
+ 107           */
+ 108          
+ 109          #ifndef CQ_DEBUG
+ 110          #define CQ_INT_MASK_SET(VAL)    do { IC_WritByte (TWIC_P3, 0xC1, VAL); CQ_INT_MASK = (VAL); } while (0)
+ 111          #else
+              #define CQ_INT_MASK_SET(VAL)    do { IC_WritByte (TWIC_P3, 0xC1, VAL); CQ_INT_MASK = (VAL); if ((cq_debug 
+             -& CQ_DEBUG_SET_REG)) DBG_PRINT ("P3_C1=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 114          
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 3   
+
+ 115          /*
+ 116           * P3_C2            Interrupt Status
+ 117           *  [3]     R/W1C   Command queue overflow
+ 118           *  [2]     R/W1C   Wait trigger signal time-out
+ 119           *  [1]     R/W1C   Invalid command
+ 120           *  [0]     R/W1C   Command queue done
+ 121           */
+ 122          #define CQ_DONE                 (1 << 0)
+ 123          #define CQ_INVALID_CMD          (1 << 1)
+ 124          #define CQ_TIMEOUT              (1 << 2)
+ 125          #define CQ_OVERFLOW             (1 << 3)
+ 126          
+ 127          #ifndef CQ_DEBUG
+ 128          #define CQ_INT_STAT_SET(VAL)    do { IC_WritByte (TWIC_P3, 0xC2, VAL); } while (0)
+ 129          #else
+              #define CQ_INT_STAT_SET(VAL)    do { IC_WritByte (TWIC_P3, 0xC2, VAL); if ((cq_debug & CQ_DEBUG_SET_REG)) 
+             -DBG_PRINT ("P3_C2=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 132          
+ 133          /*
+ 134           * P3_C3            Trigger Source
+ 135           *  [7]     R/W     CQ_issue (de-asserted when done)
+ 136           *  [6]     R/W     CQ_action
+ 137           *                  if (CQ_locked == 0) CQ_action <= CQ_issue;
+ 138           *                  else (CQ_issue==0) CQ_action <= 0;
+ 139           *  [1:0]   R/W     trigger_source
+ 140           *                  0: software trigger
+ 141           *                  1: vsync rising
+ 142           *                  2: vde falling
+ 143           */
+ 144          #define CQ_ISSUE                (1 << 7)
+ 145          #define CQ_TRIGGER_SRC_MASK     0x03
+ 146          
+ 147          #ifndef CQ_DEBUG
+ 148          #define CQ_TRIGGER_SRC_SET(VAL) do { IC_WritByte (TWIC_P3, 0xC3, VAL); CQ_TRIGGER_SRC = ((VAL) & CQ_TRIGGE
+             -R_SRC_MASK); } while (0)
+ 149          #else
+              #define CQ_TRIGGER_SRC_SET(VAL) do { IC_WritByte (TWIC_P3, 0xC3, VAL); CQ_TRIGGER_SRC = ((VAL) & CQ_TRIGGE
+             -R_SRC_MASK); if ((cq_debug & CQ_DEBUG_SET_REG)) DBG_PRINT ("P3_C3=0x%02bx\n", IC_ReadByte (TWIC_P3, 0xC3)); } while (0)
+              #endif
+ 152          
+ 153          #ifndef CQ_DEBUG
+ 154          #define CQ_TRIGGER_ISSUE() do { IC_WritByte (TWIC_P3, 0xC3, (CQ_ISSUE | IC_ReadByte (TWIC_P3, 0xC3))); } w
+             -hile (0)
+ 155          #else
+              #define CQ_TRIGGER_ISSUE() do { IC_WritByte (TWIC_P3, 0xC3, (CQ_ISSUE | IC_ReadByte (TWIC_P3, 0xC3))); if 
+             -((cq_debug & CQ_DEBUG_SET_REG)) DBG_PRINT ("P3_C3=0x%02bx\n", IC_ReadByte (TWIC_P3, 0xC3)); } while (0)
+              #endif
+ 158          
+ 159          /*
+ 160           * P3_C5            Data Port
+ 161           *  [7:0]   R/W     Data port to SRAM (read for debug mode only)
+ 162           */
+ 163          #define CQ_2BYTE_CMD            (0 << 7)
+ 164          #define CQ_3BYTE_CMD            (1 << 7)
+ 165          #define CQ_INCR_SHIFT           6
+ 166          #define CQ_PAGE_SHIFT           3
+ 167          #define CQ_LEN_SHIFT            0
+ 168          
+ 169          #ifndef CQ_DEBUG
+ 170          #define CQ_DATAPORT_SET(VAL)    do { IC_WritByte (TWIC_P3, 0xC5, VAL); cq_size++; cq_wlen--; } while (0)
+ 171          #else
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 4   
+
+              #define CQ_DATAPORT_SET(VAL)    do { IC_WritByte (TWIC_P3, 0xC5, VAL); if ((cq_debug & CQ_DEBUG_SET_REG)) 
+             -DBG_PRINT ("P3_C5=0x%02bx\n", (VAL)); if ((cq_debug & CQ_DEBUG_DATAPORT)) DBG_PRINT ("CQ[%bd]=0x%02bx\n", cq_size, (VAL)
+             -); cq_size++; cq_wlen--; } while (0)
+              #endif
+ 174          
+ 175          /*
+ 176           * P3_C6            Wait Trigger Time Out
+ 177           *  [7:0]   R/W     Time out threshold in WAIT TRIGGER state.
+ 178           *                  If the timer tick (1ms) is counted to this threshold,
+ 179           *                  command queue will start programming sequence and then
+ 180           *                  issue a time-out interrupt.
+ 181           *                  Set 0 to disable this feature.
+ 182           */
+ 183          
+ 184          #ifndef CQ_DEBUG
+ 185          #define CQ_TRIGGER_TIMEOUT_SET(VAL) do { IC_WritByte (TWIC_P3, 0xC6, VAL); CQ_TRIGGER_TIMEOUT = (VAL); } w
+             -hile (0)
+ 186          #else
+              #define CQ_TRIGGER_TIMEOUT_SET(VAL) do { IC_WritByte (TWIC_P3, 0xC6, VAL); CQ_TRIGGER_TIMEOUT = (VAL); if 
+             -((cq_debug & CQ_DEBUG_SET_REG)) DBG_PRINT ("P3_C6=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 189          
+ 190          /*
+ 191           * P3_C7            Queue Pointer
+ 192           *  [7:0]   R/W     When debug mode, the SRAM address will be override by
+ 193           *                  this queue pointer, and the corresponding data can be
+ 194           *                  read from data port.
+ 195           */
+ 196          
+ 197          #ifndef CQ_DEBUG
+ 198          #define CQ_POINTER_SET(VAL)     do { IC_WritByte (TWIC_P3, 0xC7, VAL); } while (0)
+ 199          #else
+              #define CQ_POINTER_SET(VAL)     do { IC_WritByte (TWIC_P3, 0xC7, VAL); if ((cq_debug & CQ_DEBUG_SET_REG)) 
+             -DBG_PRINT ("P3_C7=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 202          
+ 203          /*
+ 204           * P3_C8            CQ_line_count_L
+ 205           *  [7:0]   R       CQ_line_count[7:0]
+ 206           *                  The line number when command queue is done.
+ 207           *
+ 208           * P3_C9            CQ_line_count_H
+ 209           *  [3:0]   R       CQ_line_count [11:8]
+ 210           *                  The line number when command queue is done.
+ 211           */
+ 212          #define CQ_LINECNT              ((((int)IC_ReadByte (TWIC_P3, 0xC9)) << 8) | ((int)IC_ReadByte (TWIC_P3, 0
+             -xC8)))
+ 213          
+ 214          #ifndef CQ_DEBUG
+ 215          #define CQ_LINECNT_L_SET(VAL)   do { IC_WritByte (TWIC_P3, 0xC8, VAL); } while (0)
+ 216          #else
+              #define CQ_LINECNT_L_SET(VAL)   do { IC_WritByte (TWIC_P3, 0xC8, VAL); if ((cq_debug & CQ_DEBUG_SET_REG)) 
+             -DBG_PRINT ("P3_C8=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 219          
+ 220          #ifndef CQ_DEBUG
+ 221          #define CQ_LINECNT_H_SET(VAL)   do { IC_WritByte (TWIC_P3, 0xC9, VAL); } while (0)
+ 222          #else
+              #define CQ_LINECNT_H_SET(VAL)   do { IC_WritByte (TWIC_P3, 0xC9, VAL); if ((cq_debug & CQ_DEBUG_SET_REG)) 
+             -DBG_PRINT ("P3_C9=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 225          
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 5   
+
+ 226          /*
+ 227           * P3_CA            Trigger Timing Adjustment_L
+ 228           *  [7:0]   R/W     CQ_delay_amount[7:0]
+ 229           *
+ 230           * P3_CB            Trigger Timing Adjustment_H
+ 231           *  [7]     R/W     CQ_delay_enable
+ 232           *  [6]     R/W     CQ_delay_unit (0: clock, 1: line)
+ 233           *  [1:0]   R/W     CQ_delay_amount[9:8]
+ 234           */
+ 235          #define CQ_DELAY_IN_LINE            (1 << 6)
+ 236          #define CQ_DELAY_ENABLE             (1 << 7)
+ 237          
+ 238          #ifndef CQ_DEBUG
+ 239          #define CQ_TRIGGER_ADJ_L_SET(VAL) do { IC_WritByte (TWIC_P3, 0xCA, VAL); CQ_TRIGGER_ADJ_L = (VAL); } while
+             - (0)
+ 240          #else
+              #define CQ_TRIGGER_ADJ_L_SET(VAL) do { IC_WritByte (TWIC_P3, 0xCA, VAL); CQ_TRIGGER_ADJ_L = (VAL); if ((cq
+             -_debug & CQ_DEBUG_SET_REG)) DBG_PRINT ("P3_CA=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 243          
+ 244          #ifndef CQ_DEBUG
+ 245          #define CQ_TRIGGER_ADJ_H_SET(VAL) do { IC_WritByte (TWIC_P3, 0xCB, VAL); CQ_TRIGGER_ADJ_H = (VAL); } while
+             - (0)
+ 246          #else
+              #define CQ_TRIGGER_ADJ_H_SET(VAL) do { IC_WritByte (TWIC_P3, 0xCB, VAL); CQ_TRIGGER_ADJ_H = (VAL); if ((cq
+             -_debug & CQ_DEBUG_SET_REG)) DBG_PRINT ("P3_CB=0x%02bx\n", (VAL)); } while (0)
+              #endif
+ 249          
+ 250          
+ 251          
+ 252          /*
+ 253           * Synopsis     void cq_info (void); 
+ 254           * Description  show command debug information and CQ controller registers.
+ 255           * Parameters   none
+ 256           * Return       none
+ 257           */
+ 258          void
+ 259          cq_info (void)
+ 260          {
+ 261   1      #ifdef CQ_DEBUG
+                  char i;
+              
+                  DBG_PRINT ("Command Queue variables:\n");
+                  DBG_PRINT ("  debug: %02bx\n", cq_debug);
+                  DBG_PRINT ("    CQ_DEBUG_SET_REG: %d\n", (int)((cq_debug & CQ_DEBUG_SET_REG) != 0));
+                  DBG_PRINT ("    CQ_DEBUG_DATAPORT: %d\n", (int)((cq_debug & CQ_DEBUG_DATAPORT) != 0));
+                  DBG_PRINT ("    CQ_DEBUG_ISSUE: %d\n", (int)((cq_debug & CQ_DEBUG_ISSUE) != 0));
+                  DBG_PRINT ("    CQ_DEBUG_LINECNT: %d\n", (int)((cq_debug & CQ_DEBUG_LINECNT) != 0));
+                  DBG_PRINT ("    CQ_DEBUG_CONFIG: %d\n", (int)((cq_debug & CQ_DEBUG_CONFIG) != 0));
+                  DBG_PRINT ("    CQ_DEBUG_WRITE: %d\n", (int)((cq_debug & CQ_DEBUG_WRITE) != 0));
+                  DBG_PRINT ("    CQ_DEBUG_REGTABLE: %d\n", (int)((cq_debug & CQ_DEBUG_REGTABLE) != 0));
+                  DBG_PRINT ("  interrupt status: %bd\n", cq_status);
+                  DBG_PRINT ("  write length: %bd\n", cq_wlen);
+                  DBG_PRINT ("  queue size: %bd\n", cq_size);
+                  DBG_PRINT ("  queue size (last): %bd\n", cq_size_last);
+                  DBG_PRINT ("  trigger source: %bd\n", IC_ReadByte (TWIC_P3, 0xC3) & 0x03);
+                  DBG_PRINT ("  trigger timeout: %bd\n", IC_ReadByte (TWIC_P3, 0xC6));
+                  DBG_PRINT ("  trigger delay: %d\n", (int)(IC_ReadByte (TWIC_P3, 0xCA)) | (((int)(IC_ReadByte (TWIC_P3,
+             - 0xCB) & 0x3)) << 8));
+                  DBG_PRINT ("\n");
+              
+                  DBG_PRINT ("Command Queue Registers:\n");
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 6   
+
+                  for (i = 0; i < 16; i++)
+                      DBG_PRINT ("  P3_C%bX = 0x%02bx\n", i, IC_ReadByte (TWIC_P3, 0xC0 + i));
+                  DBG_PRINT ("\n");
+              #endif
+ 287   1      }
+ 288          
+ 289          /*
+ 290           * Synopsis     void cq_dump (void);
+ 291           * Description  dump data in command queue (for debug only).
+ 292           * Parameters   none
+ 293           * Return       none
+ 294           */
+ 295          void
+ 296          cq_dump (void)
+ 297          {
+ 298   1          unsigned char size = cq_size > 0 ? cq_size : cq_size_last;
+ 299   1          unsigned char cq_setting;
+ 300   1          unsigned char i, v;
+ 301   1      
+ 302   1          DBG_PRINT ("CQ_SIZE: %bd\n", size);
+ 303   1      
+ 304   1          cq_setting = IC_ReadByte (TWIC_P3, 0xC0);
+ 305   1          CQ_SETTING_SET (cq_setting | (1 << 1));
+ 306   1          for (i = 0; i < size; i++) {
+ 307   2              CQ_POINTER_SET (i);
+ 308   2              v = IC_ReadByte (TWIC_P3, 0xC5);
+ 309   2              DBG_PRINT ("%3bd: 0x%02bx\n", i, v);
+ 310   2          }
+ 311   1          CQ_SETTING_SET (cq_setting & ~(1 << 1));
+ 312   1      }
+ 313          
+ 314          /*
+ 315           * Synopsis     static void cq_issue (void);
+ 316           * Description  start command queue programming sequence.
+ 317           * Parameters   none
+ 318           * Return       none
+ 319           */
+ 320          static void
+ 321          cq_issue (void)
+ 322          {
+ 323   1      #ifdef CQ_DEBUG
+                  if ((cq_debug & CQ_DEBUG_ISSUE)) {
+                      DBG_PRINT ("cq_issue: trigger=0x%02bx, size=%bd\n",
+                              (CQ_ISSUE | IC_ReadByte (TWIC_P3, 0xC3)) , cq_size);
+                  }
+              #endif
+ 329   1      
+ 330   1      #ifdef CQ_ENABLE_INT
+ 331   1        mute_tw_irq();
+ 332   1        /* enable cq irq */
+ 333   1        enable_tw_irq(IRQ_CQ_INT);
+ 334   1      #endif
+ 335   1      
+ 336   1          CQ_TRIGGER_ISSUE ();
+ 337   1          twdDelay(1);    /* FIXME it's a workaround */
+ 338   1      }
+ 339          
+ 340          /*
+ 341           * Synopsis     static char cq_issue_done (void);
+ 342           * Description  check result of command issue.
+ 343           * Parameters   none
+ 344           * Return       0 for successfully, minus if any error occurred
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 7   
+
+ 345           */
+ 346          static char
+ 347          cq_issue_done (void)
+ 348          {
+ 349   1          unsigned char status;
+ 350   1          char rc = -CQ_ERR_UNKNOWN;
+ 351   1      
+ 352   1      #ifdef CQ_ENABLE_INT
+ 353   1          status = cq_status;
+ 354   1          if (status == 0)
+ 355   1              /* issue not done */
+ 356   1              return 0;
+ 357   1          cq_status = 0;          /* clear interrupt status */
+ 358   1          
+ 359   1          /* RESTORE INT MASK CONFIG */
+ 360   1        restore_tw_irq();
+ 361   1      #else
+                  status = IC_ReadByte (TWIC_P3, 0xC2);
+                  if (status == 0)
+                      /* issue not done */
+                      return 0;
+                  CQ_INT_STAT_SET (0xff); /* clear interrupt status */
+              #endif
+ 368   1      
+ 369   1          cq_size_last = cq_size;
+ 370   1          cq_size = 0;
+ 371   1      
+ 372   1      #ifdef CQ_DEBUG
+                  if ((cq_debug & CQ_DEBUG_LINECNT)) {
+                      DBG_PRINT ("CQ_LINECNT: %d\n", CQ_LINECNT);
+                  }
+              #endif
+ 377   1      
+ 378   1          if ((status & CQ_OVERFLOW)) {
+ 379   2              /* FIXME workaround hardware bug */
+ 380   2              cq_reset ();
+ 381   2          }
+ 382   1      
+ 383   1          if (status == CQ_DONE) {
+ 384   2              /* successful */
+ 385   2              rc = 1;
+ 386   2          } else {
+ 387   2              /* shit happens */
+ 388   2              DBG_PRINT ("CQ_INT_STAT_REG: 0x%02bx\n", status);
+ 389   2      
+ 390   2              if ((status & CQ_OVERFLOW)) {
+ 391   3                  ERROR (("queue overflow\n"));
+ 392   3                  rc = -CQ_ERR_QUEUE_OVERFLOW;
+ 393   3              }
+ 394   2              if ((status & CQ_TIMEOUT)) {
+ 395   3                  ERROR (("trigger timeout\n"));
+ 396   3                  rc = -CQ_ERR_TRIGGER_TIMEOUT;
+ 397   3              }
+ 398   2              if ((status & CQ_INVALID_CMD)) {
+ 399   3                  ERROR (("invalid command\n"));
+ 400   3                  rc = -CQ_ERR_INVALID_CMD;
+ 401   3              }
+ 402   2          }
+ 403   1      
+ 404   1          return rc;
+ 405   1      }
+ 406          
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 8   
+
+ 407          /*
+ 408           * Synopsis     char cq_available (void);
+ 409           * Description  report available queue length.
+ 410           * Parameters   none
+ 411           * Return       available queue length
+ 412           */
+ 413          char
+ 414          cq_available (void)
+ 415          {
+ 416   1          return (CQ_MAX_SIZE - cq_size);
+ 417   1      }
+ 418          
+ 419          /*
+ 420           * Synopsis     char cq_config (unsigned char page,
+ 421           *                              unsigned char addr,
+ 422           *                              unsigned char incr,
+ 423           *                              unsigned char size);
+ 424           * Description  setup command header.
+ 425           * Parameters   page - page no.
+ 426           *              addr - address
+ 427           *              incr - address to write is repeat(0) or incremental(1)
+ 428           *              size - length of command
+ 429           * Return       0 for successful, minus if any error occurred
+ 430           * NOTE         CQ attributes, including trigger source, trigger delay time
+ 431           *              and trigger wait timeout, should be configured before calling
+ 432           *              cq_config().
+ 433           *              If the queue is going to be full, it will be automatically
+ 434           *              flushed by calling cq_flush() before setup command header.
+ 435           */
+ 436          char
+ 437          cq_config (unsigned char page, unsigned char addr, unsigned char incr, unsigned char size)
+ 438          {
+ 439   1          unsigned char wlen = size + (size > 8 ? 3 : 2);
+ 440   1          unsigned char temp;
+ 441   1          char rc;
+ 442   1      
+ 443   1      #ifdef CQ_DEBUG
+                  if ((cq_debug & CQ_DEBUG_CONFIG)) {
+                      DBG_PRINT ("cq_config(%bd,0x%02bx,%bd,%bd)\n", page, addr, incr, size);
+                  }
+              #endif
+ 448   1      
+ 449   1          /* sanity check */
+ 450   1          if (size == 0) {
+ 451   2              ERROR (("illegal zero length\n"));
+ 452   2              return -CQ_ERR_LENGTH;
+ 453   2          }
+ 454   1      
+ 455   1          if (size > (CQ_MAX_SIZE - 3)) {
+ 456   2              ERROR (("illegal data length\n"));
+ 457   2              return -CQ_ERR_LENGTH;
+ 458   2          }
+ 459   1      
+ 460   1          if (cq_wlen != 0) {
+ 461   2              ERROR (("last command unfinished\n"));
+ 462   2              return -CQ_ERR_UNFINISHED;
+ 463   2          }
+ 464   1      
+ 465   1          /* flush queue forcely if it's going to be full */
+ 466   1          if (cq_size + wlen > CQ_MAX_SIZE) {
+ 467   2              rc = cq_flush ();
+ 468   2              if (rc < 0)
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 9   
+
+ 469   2                  return rc;
+ 470   2          }
+ 471   1      
+ 472   1          cq_wlen = wlen;
+ 473   1      
+ 474   1          /* command header */
+ 475   1          if (size < 9) {
+ 476   2              temp = CQ_2BYTE_CMD;
+ 477   2              temp |= (incr != 0) << CQ_INCR_SHIFT;
+ 478   2              temp |= (page & 0x7) << CQ_PAGE_SHIFT;
+ 479   2              temp |= (size - 1) << CQ_LEN_SHIFT;
+ 480   2              CQ_DATAPORT_SET (temp);
+ 481   2              CQ_DATAPORT_SET (addr);
+ 482   2          } else {
+ 483   2              temp = CQ_3BYTE_CMD;
+ 484   2              temp |= (incr != 0) << CQ_INCR_SHIFT;
+ 485   2              temp |= (page & 0x7) << CQ_PAGE_SHIFT;
+ 486   2              CQ_DATAPORT_SET (temp);
+ 487   2              CQ_DATAPORT_SET (size - 1);
+ 488   2              CQ_DATAPORT_SET (addr);
+ 489   2          }
+ 490   1      
+ 491   1          return 0;
+ 492   1      }
+ 493          
+ 494          /*
+ 495           * Synopsis     char cq_data (unsigned char byte);
+ 496           * Description  write one byte of a command.
+ 497           * Parameters   byte - one byte
+ 498           * Return       0 for successful, minus if any error occurred
+ 499           */
+ 500          char
+ 501          cq_data (unsigned char byte)
+ 502          {
+ 503   1          if (cq_wlen == 0) {
+ 504   2              ERROR (("too many data\n"));
+ 505   2              return -CQ_ERR_CMD_OVERFLOW;
+ 506   2          }
+ 507   1      
+ 508   1          CQ_DATAPORT_SET (byte);
+ 509   1          return 0;
+ 510   1      }
+ 511          
+ 512          /*
+ 513           * Synopsis     char cq_flush (void);
+ 514           * Description  flush commands in command queue forcely.
+ 515           * Parameters   none
+ 516           * Return       0 for successful, minus if any error occurred
+ 517           */
+ 518          char
+ 519          cq_flush (void)
+ 520          {
+ 521   1          unsigned int i;
+ 522   1          char rc;
+ 523   1      
+ 524   1          if (cq_wlen != 0) {
+ 525   2              ERROR (("last issue unfinished\n"));        
+ 526   2          return -CQ_ERR_UNFINISHED;
+ 527   2          }
+ 528   1      
+ 529   1          if (cq_size == 0) {
+ 530   2              ERROR (("command queue empty\n"));        
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 10  
+
+ 531   2          return -CQ_ERR_EMPTY;
+ 532   2          }
+ 533   1      
+ 534   1          cq_issue ();
+ 535   1          for (i = 0; i < 0xffff; i++) {
+ 536   2              if ((rc = cq_issue_done ()))
+ 537   2                  break;
+ 538   2          }
+ 539   1      
+ 540   1          if (i == 0xffff) {
+ 541   2              cq_reset ();
+ 542   2              ERROR (("issue timeout\n"));
+ 543   2              return -CQ_ERR_ISSUE_TIMEOUT;
+ 544   2          }
+ 545   1      
+ 546   1          return rc;
+ 547   1      }
+ 548          
+ 549          /*
+ 550           * Synopsis     char cq_flush_now (void);
+ 551           * Description  setup software trigger and flush commands in command queue.
+ 552           * Parameters   none
+ 553           * Return       0 for successful, minus if any error occurred
+ 554           */
+ 555          char
+ 556          cq_flush_now (void)
+ 557          {
+ 558   1          cq_trigger_source (CQ_TRIGGER_SW);
+ 559   1          return cq_flush ();
+ 560   1      }
+ 561          
+ 562          /*
+ 563           * Synopsis     char cq_flush_vsync (void);
+ 564           * Description  setup vsync triffer and flush commands in command queue.
+ 565           * Parameters   none
+ 566           * Return       0 for successful, minus if any error occurred
+ 567           */
+ 568          char
+ 569          cq_flush_vsync (void)
+ 570          {
+ 571   1          cq_trigger_source (CQ_TRIGGER_VSYNC);
+ 572   1          return cq_flush ();
+ 573   1      }
+ 574          
+ 575          /*
+ 576           * Synopsis     char cq_flush_vde (void);
+ 577           * Description  setup vde trigger and flush commands in command queue.
+ 578           * Parameters   none
+ 579           * Return       0 for successful, minus if any error occurred
+ 580           */
+ 581          char
+ 582          cq_flush_vde (void)
+ 583          {
+ 584   1          cq_trigger_source (CQ_TRIGGER_VDE);
+ 585   1          return cq_flush ();
+ 586   1      }
+ 587          
+ 588          /*
+ 589           * Synopsis     char char cq_write_buf (unsigned char page,
+ 590           *                                      unsigned char addr,
+ 591           *                                      unsigned char incr,
+ 592           *                                      unsigned char size,
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 11  
+
+ 593           *                                      unsigned char *buf);
+ 594           * Description  add a set of commands in command queue.
+ 595           *              the address of commands to write could be repeat (for data-port
+ 596           *              registers) or incremental (for normal registers).
+ 597           * Parameters   page - page no.
+ 598           *              addr - address
+ 599           *              incr - address to write is repeat(0) or incremental(1)
+ 600           *              size - length of command
+ 601           *              buf - pointer to commands in ROM code
+ 602           * Return       0 for successful, minus if any error occurred
+ 603           * WARNING      programmers have to take care of the length of command queue
+ 604           *              in case of queue overflow.
+ 605           */
+ 606          static char
+ 607          cq_write_buf (unsigned char page, unsigned char addr, unsigned char incr, unsigned char size, unsigned cha
+             -r *buf)
+ 608          {
+ 609   1          unsigned char i;
+ 610   1          char rc;
+ 611   1      
+ 612   1      #ifdef CQ_DEBUG
+                  if ((cq_debug & CQ_DEBUG_WRITE)) {
+                      DBG_PRINT ("cq_write_buf(%bd,0x%02bx,%bd,%bd,0x%x)\n",
+                              page, addr, incr, size, (int)buf);
+                  }
+              #endif
+ 618   1      
+ 619   1      #ifdef CONFIG_EAGLE
+                  if (size == 1) {
+                      /* FIXME workaround hardware bug */
+                      rc = cq_config (page, addr, 0, 2);
+                      if (rc < 0)
+                          return rc;
+              
+                      for (i = 0; i < 2; i++) {
+                          CQ_DATAPORT_SET (buf[0]);
+                      }
+                  } else {
+                      rc = cq_config (page, addr, incr, size);
+                      if (rc < 0)
+                          return rc;
+              
+                      for (i = 0; i < size; i++) {
+                          CQ_DATAPORT_SET (buf[i]);
+                      }
+                  }
+              #else
+ 639   1          rc = cq_config (page, addr, incr, size);
+ 640   1          if (rc < 0)
+ 641   1              return rc;
+ 642   1      
+ 643   1          for (i = 0; i < size; i++) {
+ 644   2              CQ_DATAPORT_SET (buf[i]);
+ 645   2          }
+ 646   1      #endif
+ 647   1      
+ 648   1          return 0;
+ 649   1      }
+ 650          
+ 651          /*
+ 652           * Synopsis     char cq_write_cmd (unsigned char *cmd);
+ 653           * Description  add a set of commands in command queue.
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 12  
+
+ 654           *              the address of commands to write could be repeat (for data-port
+ 655           *              registers) or incremental (for normal registers).
+ 656           *              due to the limitation of command queue length, the function will
+ 657           *              automatically divide commands to write if necessary.
+ 658           * Parameters   cmd - pointer to command structure (byte0~4 is command header)
+ 659           *                  byte0   page
+ 660           *                  byte1   addr
+ 661           *                  byte3   incr
+ 662           *                  byte3   size[15:8]
+ 663           *                  byte4   size[7:0]
+ 664           *                  byte5   data
+ 665           *                  ...     ...
+ 666           * Return       0 for successful, minus if any error occurred
+ 667           */
+ 668          char
+ 669          cq_write_cmd (unsigned char *cmd)
+ 670          {
+ 671   1          struct cmdhdr *hdr;
+ 672   1          unsigned int idx, cnt;
+ 673   1          unsigned int len1;  /* lenght to be going to write */
+ 674   1          unsigned int len2;  /* max length to write */
+ 675   1          char rc;
+ 676   1      
+ 677   1          hdr = (struct cmdhdr *)cmd;
+ 678   1          cmd += sizeof (struct cmdhdr);
+ 679   1      
+ 680   1          /* flush queue if almost full */
+ 681   1          if (cq_size > (CQ_MAX_SIZE - 3)) {
+ 682   2              rc = cq_flush ();
+ 683   2              if (rc < 0)
+ 684   2                  return rc;
+ 685   2          }
+ 686   1      
+ 687   1          idx = 0;
+ 688   1          while (idx < hdr->size) {
+ 689   2              len1 = hdr->size - idx;
+ 690   2              len2 = CQ_MAX_SIZE - cq_size - (len1 > 8 ? 3 : 2);
+ 691   2              cnt = MIN (len1, len2);
+ 692   2      
+ 693   2              rc = cq_write_buf (hdr->page, (hdr->incr ? (hdr->addr + idx) : hdr->addr), hdr->incr, cnt, cmd + i
+             -dx);
+ 694   2              if (rc < 0)
+ 695   2                  return rc;
+ 696   2      
+ 697   2              idx += cnt;
+ 698   2      
+ 699   2              if (hdr->size - idx > 0) {
+ 700   3                  rc = cq_flush ();
+ 701   3                  if (rc < 0)
+ 702   3                      return rc;
+ 703   3              }
+ 704   2          }
+ 705   1      
+ 706   1          return 0;
+ 707   1      }
+ 708          
+ 709          /*
+ 710           * Synopsis     char cq_write_cmdset (unsigned char code *cmd[],
+ 711           *                                    unsigned char num); 
+ 712           * Description  write a group of command set.
+ 713           * Parameters   cmd - pointer to command sets in ROM code
+ 714           *              num - number of command sets
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 13  
+
+ 715           * Return       0 for successful, minus if any error occurred
+ 716           */
+ 717          char
+ 718          cq_write_cmdset (unsigned char code *cmd[], unsigned char num)
+ 719          {
+ 720   1          unsigned char i;
+ 721   1          char rc;
+ 722   1      
+ 723   1          for (i = 0; i < num; i++) {
+ 724   2              rc = cq_write_cmd (cmd[i]);
+ 725   2              if (rc < 0)
+ 726   2                  return rc;
+ 727   2          }
+ 728   1      
+ 729   1          return 0;
+ 730   1      }
+ 731          
+ 732          /*
+ 733           * Synopsis     void cq_trigger_source (unsigned char source);
+ 734           * Description  setup trigger source of command queue write action.
+ 735           * Parameters   trigger_src - trigger source
+ 736           *                  0 for software trigger
+ 737           *                  1 for vsync rising
+ 738           *                  2 for vde falling
+ 739           * Return       none
+ 740           */
+ 741          void
+ 742          cq_trigger_source (unsigned char source)
+ 743          {
+ 744   1          /* sanity check */
+ 745   1          if (source > 2) {
+ 746   2              ERROR (("illegal trigger source (%d)\n", source));
+ 747   2              while (1);
+ 748   2          }
+ 749   1      
+ 750   1          CQ_TRIGGER_SRC_SET (source);
+ 751   1      }
+ 752          
+ 753          /*
+ 754           * Synopsis     void cq_trigger_delay (char enable,
+ 755           *                                     int count,
+ 756           *                                     char dly_in_hsync);
+ 757           * Description  adjust the timing of command queue trigger.
+ 758           * Parameters   enable
+ 759           *                  0: disable this feature
+ 760           *                  1: enable this feature
+ 761           *              count
+ 762           *                  range: 0~1023
+ 763           *              dly_in_hsync
+ 764           *                  0: delay in clock cycle
+ 765           *                  1: delay in line (hsync rising)
+ 766           * Return       none
+ 767           */
+ 768          void
+ 769          cq_trigger_delay (char enable, int count, char dly_in_hsync)
+ 770          {
+ 771   1          unsigned char hi, lo;
+ 772   1      
+ 773   1          if (enable) {
+ 774   2              lo = (unsigned char)(count & 0xff);
+ 775   2              hi = (unsigned char)((count >> 8) & 0x3) | CQ_DELAY_ENABLE;
+ 776   2              if (dly_in_hsync)
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 14  
+
+ 777   2                  hi |= CQ_DELAY_IN_LINE;
+ 778   2          } else {
+ 779   2              lo = hi = 0;
+ 780   2          }
+ 781   1      
+ 782   1          CQ_TRIGGER_ADJ_L_SET (lo);
+ 783   1          CQ_TRIGGER_ADJ_H_SET (hi);
+ 784   1      }
+ 785          
+ 786          /*
+ 787           * Synopsis     void cq_trigger_timeout (unsigned char count);
+ 788           * Description  setup wait timeout in case trigger source is missed.
+ 789           *              data in command queue will be issued anyway if wait timeout.
+ 790           * Parameters   count - timeout threshold in WAIT TRIGGER status
+ 791           *                  range: 1~127 ms, and 0 to disable this feature.
+ 792           * Return       none
+ 793           */
+ 794          void
+ 795          cq_trigger_timeout (unsigned char count)
+ 796          {
+ 797   1          CQ_TRIGGER_TIMEOUT_SET (count);
+ 798   1      }
+ 799          
+ 800          /*
+ 801           * Synopsis     void cq_reset (void);
+ 802           * Description  reset command queue driver and controller.
+ 803           * Parameters   none
+ 804           * Return       none
+ 805           */
+ 806          void
+ 807          cq_reset (void)
+ 808          {
+ 809   1          CQ_SETTING_SET (CQ_SOFTWARE_RESET);
+ 810   1      
+ 811   1          /* restore hardware setting */
+ 812   1          IC_WritByte (TWIC_P3, 0xC1, CQ_INT_MASK);
+ 813   1          IC_WritByte (TWIC_P3, 0xC3, CQ_TRIGGER_SRC);
+ 814   1          IC_WritByte (TWIC_P3, 0xC6, CQ_TRIGGER_TIMEOUT);
+ 815   1          IC_WritByte (TWIC_P3, 0xCA, CQ_TRIGGER_ADJ_L);
+ 816   1          IC_WritByte (TWIC_P3, 0xCB, CQ_TRIGGER_ADJ_H);
+ 817   1      
+ 818   1          /* reset software setting */
+ 819   1          cq_status = 0;
+ 820   1          cq_wlen = 0;
+ 821   1          cq_size = cq_size_last = 0;
+ 822   1      
+ 823   1      #ifdef CQ_ENABLE_INT
+ 824   1          /* RESTORE INT MASK CONFIG */
+ 825   1        restore_tw_irq();
+ 826   1      #endif
+ 827   1      
+ 828   1      #ifdef CONFIG_EAGLE
+                  /* FIXME workaround hardware bug - reset write pointer */
+                  while (1) {
+                      IC_WritByte (TWIC_P3, 0xC5, 0x00);
+              
+              #ifndef CQ_ENABLE_INT
+                      cq_status = IC_ReadByte (TWIC_P3, 0xC2);
+              #endif
+                      if ((cq_status & CQ_OVERFLOW)) {
+                          IC_WritByte (TWIC_P3, 0xC2, 0xff);
+                          cq_status = 0;
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 15  
+
+                          break;
+                      }
+                  }
+              #endif
+ 843   1      }
+ 844          
+ 845          /*
+ 846           * Synopsis     void cq_init (void);
+ 847           * Description  initiate command queue driver
+ 848           * Parameters   none
+ 849           * Return       none
+ 850           */
+ 851          void
+ 852          cq_init (void)
+ 853          {
+ 854   1        cq_debug = 0;
+ 855   1        /* debug options */
+ 856   1      #ifdef CQ_DEBUG      
+                  cq_debug |= CQ_DEBUG_SET_REG;
+                  cq_debug |= CQ_DEBUG_DATAPORT;
+                  cq_debug |= CQ_DEBUG_ISSUE;
+                  cq_debug |= CQ_DEBUG_LINECNT;
+                  cq_debug |= CQ_DEBUG_CONFIG;
+                  cq_debug |= CQ_DEBUG_WRITE;
+                  cq_debug |= CQ_DEBUG_REGTABLE;
+              #endif  
+ 865   1      
+ 866   1          /* init register backup values */
+ 867   1          CQ_INT_MASK = 0;
+ 868   1          CQ_TRIGGER_SRC = 0;
+ 869   1          CQ_TRIGGER_TIMEOUT = 0;
+ 870   1          CQ_TRIGGER_ADJ_L = 0;
+ 871   1          CQ_TRIGGER_ADJ_H = 0;
+ 872   1      
+ 873   1          /* software setting */
+ 874   1          cq_status = 0;
+ 875   1          cq_wlen = 0;
+ 876   1          cq_size = cq_size_last = 0;
+ 877   1      
+ 878   1          /* hardware setting */
+ 879   1          CQ_SETTING_SET (CQ_SOFTWARE_RESET); /* software reset */
+ 880   1          CQ_INT_MASK_SET (0x00);             /* enable CQ interrupt */
+ 881   1      
+ 882   1      #ifdef CQ_ENABLE_INT
+ 883   1        /* enable cq irq */
+ 884   1        enable_tw_irq(IRQ_CQ_INT);
+ 885   1      #endif
+ 886   1      
+ 887   1        /* init setting */
+ 888   1        cq_trigger_source (0);      /* software trigger */
+ 889   1        cq_trigger_delay (0, 0, 0); /* no trigger dealy */
+ 890   1        cq_trigger_timeout (0x7F);     /* no trigger timeout */
+ 891   1        cq_info ();
+ 892   1      }
+ 893          
+ 894          /*
+ 895           * Synopsis     void cq_isr (void);
+ 896           * Description  CQ interrupt service routine. (called by INT handler only)
+ 897           * Parameters   none
+ 898           * Return       none
+ 899           */
+ 900          void
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 16  
+
+ 901          cq_isr (void)
+ 902          {
+ 903   1      #ifdef CQ_ENABLE_INT
+ 904   1          cq_status |= IC_ReadByte_INT (TWIC_P3, 0xC2);   /* read interrupt status */
+ 905   1          IC_WritByte_INT (TWIC_P3, 0xC2, cq_status);     /* clear interrupt status */
+ 906   1      
+ 907   1        clear_tw_irq(IRQ_CQ_INT);               /* clear cq interrupt status */
+ 908   1      #endif
+ 909   1      }
+ 910          
+ 911          /*
+ 912           * Synopsis     char cq_busy (void);
+ 913           * Description  report CQ action status.
+ 914           * Parameters   none
+ 915           * Return       0: idle state; 1: busy state.
+ 916           */
+ 917          char
+ 918          cq_busy (void)
+ 919          {
+ 920   1          return ((IC_ReadByte_INT (TWIC_P3, 0xC3) & (1 << 6)));
+ 921   1      }
+ 922          
+ 923          //----------------------------------------------------------------------------
+ 924          // packed API
+ 925          //----------------------------------------------------------------------------
+ 926          
+ 927          /*
+ 928           * Synopsis     char cq_write_byte (unsigned short bPage,
+ 929           *                                  unsigned char bAdd,
+ 930           *                                  unsigned char bData);
+ 931           * Description  write one byte via command queue.
+ 932           * Parameters   bPage - page no. (TWIC_P0~TWIC_P7)
+ 933           *              bAdd - address
+ 934           *              bData - data to write
+ 935           * Return       0 for successful, minus if any error occurred
+ 936           */
+ 937          char cq_write_byte(unsigned short bPage, unsigned char bAdd, unsigned char bData)
+ 938          {
+ 939   1          char rc;
+ 940   1      
+ 941   1      #ifndef ENABLE_EX_MCU
+ 942   1          /* sanity check */
+ 943   1          if ((bPage & ~0x0700))
+ 944   1              return -CQ_ERR_ARGUMENT;
+ 945   1      #else
+                bPage &= 0x000F;
+                bPage <<= 7;
+              #endif
+ 949   1      
+ 950   1          /* config command */
+ 951   1      #ifdef CONFIG_EAGLE
+                  rc = cq_config ((unsigned char)(bPage >> 8), bAdd, 0, 2);
+                  if (rc < 0)
+                      return rc;
+              
+                  CQ_DATAPORT_SET (bData);
+                  CQ_DATAPORT_SET (bData);
+              #else
+ 959   1          rc = cq_config ((unsigned char)(bPage >> 8), bAdd, 0, 1);
+ 960   1          if (rc < 0)
+ 961   1              return rc;
+ 962   1      
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 17  
+
+ 963   1          CQ_DATAPORT_SET (bData);
+ 964   1      #endif
+ 965   1      
+ 966   1          return 0;
+ 967   1      }
+ 968          
+ 969          /*
+ 970           * Synopsis     char cq_write_byte_issue (unsigned short bPage,
+ 971           *                                        unsigned char bAdd,
+ 972           *                                        unsigned char bData,
+ 973           *                                        unsigned char trig);
+ 974           * Description  setup trigger source and write one byte.
+ 975           * Parameters   bPage - page no. (TWIC_P0~TWIC_P7)
+ 976           *              bAdd - address
+ 977           *              bData - data to write
+ 978           *              trig - trigger source
+ 979           * Return       0 for successful, minus if any error occurred
+ 980           */
+ 981          char cq_write_byte_issue(unsigned short bPage, unsigned char bAdd, unsigned char bData,unsigned char trig)
+ 982          {
+ 983   1          cq_trigger_source (trig);
+ 984   1          cq_write_byte (bPage, bAdd, bData);
+ 985   1          return cq_flush ();
+ 986   1      }
+ 987          
+ 988          /*
+ 989           * Synopsis     char cq_write_byte (unsigned short bPage,
+ 990           *                                  unsigned char bAdd,
+ 991           *                                  unsigned short bData,
+ 992           *                                  unsigned char incr);
+ 993           * Description  write one word via command queue
+ 994           * Parameters   bPage - page no. (TWIC_P0~TWIC_P7)
+ 995           *              bAdd - address
+ 996           *              incr - address to write is repeat(0) or incremental(1)
+ 997           * Return       0 for successful, minus if any error occurred
+ 998           */
+ 999          char cq_write_word(unsigned short bPage, unsigned char bAdd, unsigned short bData, unsigned char incr)
+1000          {
+1001   1          char rc;
+1002   1      
+1003   1      #ifndef ENABLE_EX_MCU
+1004   1          /* sanity check */
+1005   1          if ((bPage & ~0x0700))
+1006   1              return -CQ_ERR_ARGUMENT;
+1007   1      #else
+                bPage &= 0x000F;
+                bPage <<= 7;
+              #endif
+1011   1      
+1012   1          /* config command */
+1013   1          rc = cq_config ((unsigned char)(bPage >> 8), bAdd, incr, 2);
+1014   1          if (rc < 0)
+1015   1              return rc;
+1016   1      
+1017   1          /* LO byte first */
+1018   1          CQ_DATAPORT_SET ((unsigned char)(bData >> 0));
+1019   1          CQ_DATAPORT_SET ((unsigned char)(bData >> 8));
+1020   1      
+1021   1          return 0;
+1022   1      }
+1023          
+1024          /*
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 18  
+
+1025           * Synopsis     char cq_write_byte_issue (unsigned short bPage,
+1026           *                                        unsigned char bAdd,
+1027           *                                        unsigned short bData,
+1028           *                                        unsigned char incr,
+1029           *                                        unsigned char trig);
+1030           * Description  setup trigger source and write one word.
+1031           * Parameters   bPage - page no. (TWIC_P0~TWIC_P7)
+1032           *              bAdd - address
+1033           *              incr - address to write is repeat(0) or incremental(1)
+1034           *              trig - trigger source
+1035           * Return       0 for successful, minus if any error occurred
+1036           */
+1037          char cq_write_word_issue(unsigned short bPage, unsigned char bAdd, unsigned short bData, unsigned char inc
+             -r,unsigned char trig)
+1038          {
+1039   1          cq_trigger_source (trig);
+1040   1          cq_write_word (bPage, bAdd, bData, incr);
+1041   1          return cq_flush ();
+1042   1      }
+1043          
+1044          /*
+1045           * Synopsis     char cq_WriteRegsTable (unsigned char code *RegsTable,
+1046           *                                     unsigned char end_page);
+1047           * Description  write a group of register & value pairs.
+1048           * Parameters   RegsTable - pointer to regtable
+1049           *              end_page - the last page in regtable
+1050           * Return       0 for successful, minus if any error occurred
+1051           */
+1052          char cq_WriteRegsTable(unsigned char code* RegsTable,unsigned char end_page)
+1053          {
+1054   1          unsigned char page = 0;     /* page index */
+1055   1          unsigned int regs = 0;      /* num of written registers in a page */
+1056   1          unsigned int idx, num, i, j;
+1057   1          unsigned int cnt;
+1058   1          unsigned int len1;          /* lenght to be going to write */
+1059   1          unsigned int len2;          /* max length to write */
+1060   1          struct regval *rv;
+1061   1          char rc;
+1062   1      
+1063   1          idx = 0;
+1064   1          while (1) {
+1065   2              rv = ((struct regval *)RegsTable) + idx;
+1066   2      
+1067   2              /* check end of page */
+1068   2              if (rv->addr == 0xff) {
+1069   3      #ifdef CQ_DEBUG
+                          if ((cq_debug & CQ_DEBUG_REGTABLE)) {
+                              DBG_PRINT ("======== page[%bd] cnt=%d ========\n", page, regs);
+                          }
+              #endif
+1074   3                  page++;
+1075   3                  regs = 0;
+1076   3                  idx++;
+1077   3      
+1078   3                  if (page == end_page)
+1079   3                      break;
+1080   3      
+1081   3                  continue;
+1082   3              }
+1083   2      
+1084   2              /* looking for contiguous data */
+1085   2              for (i = 0;; i++) {
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 19  
+
+1086   3                  if ((rv[i].addr + 1 != rv[i+1].addr) || (rv[i+1].addr == 0xff))
+1087   3                      break;
+1088   3              }
+1089   2              num = i + 1;
+1090   2      #ifdef CQ_DEBUG
+                          if ((cq_debug & CQ_DEBUG_REGTABLE)) {
+                              DBG_PRINT ("page=%bd, addr=0x%02bx, size=%d\n", page, rv->addr, num);
+                          }
+              #endif
+1095   2      
+1096   2              /* write regs */
+1097   2              if (cq_size > (CQ_MAX_SIZE - 3)) {
+1098   3                  rc = cq_flush ();
+1099   3                  if (rc < 0)
+1100   3                      return rc;
+1101   3              }
+1102   2      
+1103   2              i = 0;
+1104   2              while (i < num) {
+1105   3                  len1 = num - i;
+1106   3                  len2 = CQ_MAX_SIZE - cq_size - (len1 > 8 ? 3 : 2);
+1107   3                  cnt = MIN (len1, len2);
+1108   3      
+1109   3      #ifdef CQ_DEBUG
+                          if ((cq_debug & CQ_DEBUG_WRITE)) {
+                              DBG_PRINT ("cq_write_rv(%bd,0x%02bx,%bd,%bd,0x%x)\n",
+                                      page, rv[i].addr, 1, cnt, (int)&rv[i]);
+                          }
+              #endif
+1115   3      
+1116   3      #ifdef CONFIG_EAGLE
+                          if (cnt == 1) {
+                              /* FIXME workaround hardware bug */
+                              rc = cq_config (page, rv[i].addr, 0, 2);
+                              if (rc < 0)
+                                  return rc;
+              
+                              for (j = 0; j < 2; j++) {
+                                  CQ_DATAPORT_SET (rv[i].value);
+                              }
+                          } else {
+                              rc = cq_config (page, rv[i].addr, 1, cnt);
+                              if (rc < 0)
+                                  return rc;
+              
+                              for (j = 0; j < cnt; j++) {
+                                  CQ_DATAPORT_SET (rv[i+j].value);
+                              }
+                          }
+              #else
+1136   3                  rc = cq_config (page, rv[i].addr, 1, cnt);
+1137   3                  if (rc < 0)
+1138   3                      return rc;
+1139   3      
+1140   3                  for (j = 0; j < cnt; j++) {
+1141   4                      CQ_DATAPORT_SET (rv[i+j].value);
+1142   4                  }
+1143   3      #endif
+1144   3      
+1145   3                  i += cnt;
+1146   3      
+1147   3                  if (num - i > 0) {
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 20  
+
+1148   4                      rc = cq_flush ();
+1149   4                      if (rc < 0)
+1150   4                          return rc;
+1151   4                  }
+1152   3              }
+1153   2      
+1154   2              regs += num;
+1155   2              idx += num;
+1156   2          }
+1157   1      
+1158   1          return 0;
+1159   1      }
+1160          
+1161          /*
+1162           * Synopsis     char cq_WriteRegsTable_issue (unsigned char code *RegsTable,
+1163           *                                            unsigned char end_page,
+1164           *                                            unsigned char trig);
+1165           * Description  setup trigger source and write RegsTable.
+1166           * Parameters   RegsTable - pointer to regtable
+1167           *              end_page - the last page in regtable
+1168           *              trig - trigger source
+1169           * Return       0 for successful, minus if any error occurred
+1170           */
+1171          char cq_WriteRegsTable_issue(unsigned char code* RegsTable,unsigned char end_page, unsigned char trig)
+1172          {
+1173   1          cq_trigger_source (trig);
+1174   1          return cq_WriteRegsTable (RegsTable, end_page);
+1175   1      }
+1176          
+1177          //----------------------------------------------------------------------------
+1178          // debug only
+1179          //----------------------------------------------------------------------------
+1180          
+1181          /*
+1182           * Synopsis     void cq_try_overflow (void);
+1183           * Description  make queue overflow and test error handling.
+1184           * Parameters   none
+1185           * Return       none
+1186           */
+1187          void cq_try_overflow (void)
+1188          {
+1189   1          unsigned char i;
+1190   1      
+1191   1          IC_WritByte (TWIC_P3, 0xC5, 0x80);  /* 3-byte cmd, incr=0, page=0 */
+1192   1          IC_WritByte (TWIC_P3, 0xC5, 0x7f);  /* len=128 */
+1193   1          IC_WritByte (TWIC_P3, 0xC5, 0x01);  /* addr=0x01 */
+1194   1          for (i = 0; i < 128; i++) {         /* data: 128 bytes (overflow) */
+1195   2              IC_WritByte (TWIC_P3, 0xC5, 0x00);
+1196   2          }
+1197   1      
+1198   1          cq_size = 3 + 128;
+1199   1          cq_flush ();
+1200   1      }
+1201          
+1202          /*
+1203           * Synopsis     void cq_try_trigger_timeout (void);
+1204           * Description  
+1205           * Parameters   none
+1206           * Return       none
+1207           */
+1208          void cq_try_trigger_timeout (void)
+1209          {
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 21  
+
+1210   1          unsigned char P0_CA, P3_C3, P3_C6;
+1211   1          unsigned char i;
+1212   1      
+1213   1          P0_CA = IC_ReadByte (TWIC_P0, 0xCA);    /* backup P0_CA */
+1214   1      #ifdef CONFIG_EAGLE
+                  IC_WritByte (TWIC_P0, 0xCA, IC_ReadByte (TWIC_P0, 0xCA) | (1 << 5));    /* PDn_Bias=1 (turn off vsync)
+             - */
+              #endif
+1217   1      #ifdef CONFIG_THETIS
+1218   1          IC_WritByte (TWIC_P0, 0xCA, IC_ReadByte (TWIC_P0, 0xCA) & ~(1 << 5));   /* DPLL_PowerDown_=0 (turn off
+             - vsync) */
+1219   1      #endif
+1220   1      
+1221   1          P3_C3 = IC_ReadByte (TWIC_P3, 0xC3);    /* backup P3_C3 */
+1222   1          IC_WritByte (TWIC_P3, 0xC3, 1);         /* trigger source = vsync */
+1223   1      
+1224   1          P3_C6 = IC_ReadByte (TWIC_P3, 0xC6);    /* backup P3_C6 */
+1225   1          IC_WritByte (TWIC_P3, 0xC6, 10);        /* trigger timeout = 10ms */
+1226   1      
+1227   1          IC_WritByte (TWIC_P3, 0xC5, 0x80);      /* 3-byte cmd, incr=0, page=0 */
+1228   1          IC_WritByte (TWIC_P3, 0xC5, 0x0f);      /* len=16 */
+1229   1          IC_WritByte (TWIC_P3, 0xC5, 0x01);      /* addr=0x01 */
+1230   1          for (i = 0; i < 16; i++) {              /* data: 16 bytes */
+1231   2              IC_WritByte (TWIC_P3, 0xC5, 0x00);
+1232   2          }
+1233   1      
+1234   1          cq_size = 3 + 16;
+1235   1          cq_flush ();
+1236   1      
+1237   1          IC_WritByte (TWIC_P0, 0xCA, P0_CA);     /* restore P0_CA */
+1238   1          IC_WritByte (TWIC_P3, 0xC3, P3_C3);     /* restore P3_C3 */
+1239   1          IC_WritByte (TWIC_P3, 0xC6, P3_C6);     /* restore P3_C6 */
+1240   1      }
+1241          
+1242          /*
+1243           * Synopsis     void cq_try_invalid_cmd (void);
+1244           * Description  write invalid command and test error handling.
+1245           * Parameters   none
+1246           * Return       none
+1247           */
+1248          void cq_try_invalid_cmd (void)
+1249          {
+1250   1          unsigned char i;
+1251   1      
+1252   1          IC_WritByte (TWIC_P3, 0xC5, 0x80);      /* 3-byte cmd, incr=0, page=0 */
+1253   1          IC_WritByte (TWIC_P3, 0xC5, 0x0f);      /* len=16 */
+1254   1          IC_WritByte (TWIC_P3, 0xC5, 0x01);      /* addr=0x01 */
+1255   1          for (i = 0; i < 8; i++) {               /* data: 8 bytes (underflow) */
+1256   2              IC_WritByte (TWIC_P3, 0xC5, 0x00);
+1257   2          }
+1258   1      
+1259   1          cq_size = 3 + 8;
+1260   1          cq_flush ();
+1261   1      }
+1262          
+1263          /*
+1264           * Synopsis     void cq_try_issue_timeout (void);
+1265           * Description  disable vsync and test error handling.
+1266           * Parameters   none
+1267           * Return       none
+1268           */
+1269          void cq_try_issue_timeout (void)
+C51 COMPILER V7.50   CQ                                                                    06/16/2017 08:24:34 PAGE 22  
+
+1270          {
+1271   1          unsigned char P0_CA, P3_C3, P3_C6;
+1272   1          unsigned char i;
+1273   1      
+1274   1          P0_CA = IC_ReadByte (TWIC_P0, 0xCA);    /* backup P0_CA */
+1275   1      #ifdef CONFIG_EAGLE
+                  IC_WritByte (TWIC_P0, 0xCA, IC_ReadByte (TWIC_P0, 0xCA) | (1 << 5));   /* PDn_Bias=1 (turn off vsync) 
+             -*/
+              #endif
+1278   1      #ifdef CONFIG_THETIS
+1279   1          IC_WritByte (TWIC_P0, 0xCA, IC_ReadByte (TWIC_P0, 0xCA) & ~(1 << 5));  /* DPLL_PowerDown_=0 (turn off 
+             -vsync) */
+1280   1      #endif
+1281   1      
+1282   1          P3_C3 = IC_ReadByte (TWIC_P3, 0xC3);    /* backup P3_C3 */
+1283   1          IC_WritByte (TWIC_P3, 0xC3, 1);         /* trigger source = vsync */
+1284   1      
+1285   1          P3_C6 = IC_ReadByte (TWIC_P3, 0xC6);    /* backup P3_C6 */
+1286   1          IC_WritByte (TWIC_P3, 0xC6, 0);         /* disable trigger timeout */
+1287   1      
+1288   1          IC_WritByte (TWIC_P3, 0xC5, 0x80);      /* 3-byte cmd, incr=0, page=0 */
+1289   1          IC_WritByte (TWIC_P3, 0xC5, 0x0f);      /* len=16 */
+1290   1          IC_WritByte (TWIC_P3, 0xC5, 0x01);      /* addr=0x01 */
+1291   1          for (i = 0; i < 16; i++) {              /* data: 16 bytes */
+1292   2              IC_WritByte (TWIC_P3, 0xC5, 0x00);
+1293   2          }
+1294   1      
+1295   1          cq_size = 3 + 16;
+1296   1          cq_flush ();
+1297   1      
+1298   1          IC_WritByte (TWIC_P0, 0xCA, P0_CA);     /* restore P0_CA */
+1299   1          IC_WritByte (TWIC_P3, 0xC3, P3_C3);     /* restore P3_C3 */
+1300   1          IC_WritByte (TWIC_P3, 0xC6, P3_C6);     /* restore P3_C6 */
+1301   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3684    ----
+   CONSTANT SIZE    =    322    ----
+   XDATA SIZE       =     10      98
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

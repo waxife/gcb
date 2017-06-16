@@ -1,0 +1,597 @@
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     1
+
+
+MACRO ASSEMBLER AX51 V2.14
+OBJECT MODULE PLACED IN .\Object\BANK_SWITCH.obj
+ASSEMBLER INVOKED BY: C:\Keil\C51\BIN\AX51.EXE ..\tw_lib\sys\BANK_SWITCH.A51 SET(LARGE) DEBUG PRINT(.\List\BANK_SWITCH.l
+                      st) OBJECT(.\Object\BANK_SWITCH.obj) EP
+
+LOC    OBJ             LINE     SOURCE
+
+                          1     
+                          2     
+                          3     
+                          4     
+                          5     
+                          6     
+                          7     
+                          8     
+                          9     
+                         10     
+                         11     
+                         12     
+                         13     
+                         14     $nomod51  NOLINES
+                         15     $nocond 
+                         16     ;------------------------------------------------------------------------------
+                         17     ;  This file is part of the BL51 / LX51 Banked Linker/Locater package
+                         18     ;  Copyright (c) 1988 - 2001 Keil Elektronik GmbH and Keil Software, Inc.
+                         19     ;  Version 2.21 (Code and Variable Banking for Classic 8051 Derivatives)
+                         20     ;------------------------------------------------------------------------------
+                         21     ;************************ Configuration Section *******************************
+ 0010                    22     ?B_NBANKS       EQU  16   ;  Dfine maximum Number of Banks                    *
+                         23     ;                         ; following values are allowed: 2, 4, 8, 16, 32, 64 *
+                         24     ;                         ; for BL51 the maximum value for ?B_BANKS is 32     *
+                         25     ;                         ; for LX51 the maximum value for ?B_BANKS is 64     *
+                         26     ;                                                                             *
+ 0004                    27     ?B_MODE         EQU  4    ; 0 for Bank-Switching via 8051 Port                *
+                         28     ;                         ; 1 for Bank-Switching via XDATA Port               *
+                         29     ;                         ; 4 for user-provided bank switch code              *
+                         30     ;                                                                             *
+ 0000                    31     ?B_RTX          EQU  0    ; 0 for applications without real-time OS           *
+                         32     ;                         ; 1 for applications using the RTX-51 real-time OS  *
+                         33     ;                                                                             *
+ 0000                    34     ?B_VAR_BANKING  EQU  0    ; Variable Banking via L51_BANK (far memory support)*
+                         35     ;                         ; 0 Variable Banking does not use L51_BANK.A51      *
+                         36     ;                         ; 1 Variable Banking uses this L51_BANK.A51 module  *
+                         37     ; Notes: ?B_VAR_BANKING uses the 'far' and 'far const' C51 memory types to    *
+                         38     ;        extent the space for variables in RAM and/or ROM of classic 8051     *
+                         39     ;        device.  The same hardware as for code banking is used.  Program     *
+                         40     ;        code banking and variable banking share the same hardware I/O pins.  *
+                         41     ;        The C51 Compiler must be used with the VARBANKING directive.         *
+                         42     ;        Variable Banking is only supported with the LX51 linker/locater.     *
+                         43     ;                                                                             *
+ 0000                    44     ?B_RST_BANK     EQU  0x00 ; specifies the active code bank number after CPU   *
+                         45     ;                         ; Reset.  Used to reduce the entries in the         *
+                         46     ;                         ; INTERBANK CALL TABLE.  The value 0xFF disables    *
+                         47     ;                         ; this LX51 linker/locater optimization.            *
+                         48     ; Note:  Interbank Call Table optimization is only possible with LX51.        *
+                         49     ;                                                                             *
+                         50     ;-----------------------------------------------------------------------------*
+                         51     ;                                                                             *
+                         52     ;                                                                                     *
+                         53     ;                                                                             *
+                         54     IF  ?B_MODE = 4;                                                              *
+                         55     ;-----------------------------------------------------------------------------*
+                         56     ; if ?BANK?MODE is 4 define the following switch macros                       *
+                         57     ; For bank switching via user-provided bank switch code you must define for   *
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     2
+
+                         58     ; each memory bank a own macro which contains the bank switch code.  The      *
+                         59     ; following example shows how to use the I/O lines P1.4 and P1.7 for bank     *
+                         60     ; switching.  Since you can select just 4 banks with two address lines, just  *
+                         61     ; four macros are defined.  The number of macros must conform with the number *
+                         62     ; ?B_NBANKS number, i.e. for an application with 16 memory banks you must     *
+                         63     ; define 16 macros.                                                           *
+                         64     ;                                                                             *
+                         65     ; IMPORTANT NOTES:                                                            *
+                         66     ; 1. The bank switch logic must be initialized before using it.  Therefore    *
+                         67     ;    add the following lines of code at the end of the STARTUP.A51 file:      *
+                         68     ;                :                                                            *
+                         69     ;      EXTRN CODE (?B_SWITCH0)                                                *
+                         70     ;               CALL    ?B_SWITCH0    ; init bank mechanism to code bank 0    *
+                         71     ;               LJMP    ?C_START      ; line already exits at the end of file *
+                         72     ;                :                                                            *
+                         73     ;                                                                             *
+                         74     ; 2. If the bank switch macros and the additional control code generate more  *
+                         75     ;    than 256 bytes, you need to set the LONG_MACRO flag below.  The error    *
+                         76     ;    message "BANK SWITCH CODE BIGGER THAN 256 BYTES, SET LONG_MACRO TO 1"    *
+                         77     ;    is generated in case that this is required.                              *
+                         78     ;                                                                             *
+                         79     ; 3. The only registers that can be modified in this routines without prior   *
+                         80     ;    saving are:  DPTR and ACC.                                               *
+                         81     ;                                                                             *
+                         82     ;                                                                             *
+ 0001                    83     LONG_MACRO      EQU  1    ; 0 default, for normal macros and up to 8 banks    *
+                         84     ;                         ; 1 big macro code or many banks                    *
+                         85     ;                                                                             *
+                         86     ;                                                                             *
+                         87     ;                                                                             *        
+                         88     SWITCH0         MACRO            ; Switch to Memory Bank #0                
+                         89     ;         Registers[0xF3AA]=0x40;       //Bank3_Offset[15:8]
+                         90                                     MOV             DPTR,#0xF3AA
+                         91                                     MOV             A,#0x40
+                         92                                     MOVX    @DPTR,A
+                         93     ;         Registers[0xF3AB]=0x00;       //Bank3_Offset[23:16] 
+                         94                                     CLR             A
+                         95                                     INC             DPTR
+                         96                                     MOVX    @DPTR,A
+                         97                     ENDM             
+                         98     
+                         99     SWITCH1         MACRO            ; Switch to Memory Bank #1     
+                        100     ;         Registers[0xF3AA]=0x80;       //Bank3_Offset[15:8] 
+                        101                                     MOV             DPTR,#0xF3AA
+                        102                                     MOV             A,#0x80
+                        103                                     MOVX    @DPTR,A
+                        104     ;         Registers[0xF3AB]=0x00;       //Bank3_Offset[23:16] 
+                        105                                     CLR             A
+                        106                                     INC             DPTR
+                        107                                     MOVX    @DPTR,A               
+                        108                                     ENDM 
+                        109     
+                        110     SWITCH2         MACRO            ; Switch to Memory Bank #2     
+                        111     ;         Registers[0xF3AA]=0xC0;       //Bank3_Offset[15:8] 
+                        112                                     MOV             DPTR,#0xF3AA
+                        113                                     MOV             A,#0xC0
+                        114                                     MOVX    @DPTR,A
+                        115     ;         Registers[0xF3AB]=0x00;       //Bank3_Offset[23:16] 
+                        116                                     CLR             A
+                        117                                     INC             DPTR
+                        118                                     MOVX    @DPTR,A              
+                        119                                     ENDM         
+                        120      
+                        121      SWITCH3         MACRO            ; Switch to Memory Bank #3     
+                        122     ;         Registers[0xF3AA]=0x00;       //Bank3_Offset[15:8] 
+                        123                                     MOV             DPTR,#0xF3AA
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     3
+
+                        124                                     MOV             A,#0x00
+                        125                                     MOVX    @DPTR,A
+                        126     ;         Registers[0xF3AB]=0x01;       //Bank3_Offset[23:16] 
+                        127                                     MOV     A,#0x01
+                        128                                     INC             DPTR
+                        129                                     MOVX    @DPTR,A           
+                        130                                     ENDM
+                        131     
+                        132     SWITCH4         MACRO            ; Switch to Memory Bank #4     
+                        133     ;         Registers[0xF3AA]=0x40;       //Bank3_Offset[15:8] 
+                        134                                     MOV             DPTR,#0xF3AA
+                        135                                     MOV             A,#0x40
+                        136                                     MOVX    @DPTR,A
+                        137     ;         Registers[0xF3AB]=0x01;       //Bank3_Offset[23:16] 
+                        138                                     MOV     A,#0x01
+                        139                                     INC             DPTR
+                        140                                     MOVX    @DPTR,A             
+                        141                                     ENDM
+                        142     
+                        143     SWITCH5         MACRO            ; Switch to Memory Bank #5     
+                        144     ;         Registers[0xF3AA]=0x80;       //Bank3_Offset[15:8] 
+                        145                                     MOV             DPTR,#0xF3AA
+                        146                                     MOV             A,#0x80
+                        147                                     MOVX    @DPTR,A
+                        148     ;         Registers[0xF3AB]=0x01;       //Bank3_Offset[23:16] 
+                        149                                     MOV     A,#0x01
+                        150                                     INC             DPTR
+                        151                                     MOVX    @DPTR,A            
+                        152                                     ENDM
+                        153                                     
+                        154     SWITCH6         MACRO            ; Switch to Memory Bank #6     
+                        155     ;         Registers[0xF3AA]=0xc0;       //Bank3_Offset[15:8] 
+                        156                                     MOV             DPTR,#0xF3AA
+                        157                                     MOV             A,#0xc0
+                        158                                     MOVX    @DPTR,A
+                        159     ;         Registers[0xF3AB]=0x01;       //Bank3_Offset[23:16] 
+                        160                                     MOV     A,#0x01
+                        161                                     INC             DPTR
+                        162                                     MOVX    @DPTR,A              
+                        163                                     ENDM
+                        164     
+                        165     SWITCH7         MACRO            ; Switch to Memory Bank #7     
+                        166     ;         Registers[0xF3AA]=0x00;       //Bank3_Offset[15:8] 
+                        167                                     MOV             DPTR,#0xF3AA
+                        168                                     MOV             A,#0x00
+                        169                                     MOVX    @DPTR,A
+                        170     ;         Registers[0xF3AB]=0x02;       //Bank3_Offset[23:16] 
+                        171                                     MOV     A,#0x02
+                        172                                     INC             DPTR
+                        173                                     MOVX    @DPTR,A              
+                        174                                     ENDM
+                        175     
+                        176     SWITCH8         MACRO            ; Switch to Memory Bank #8
+                        177     ;         Registers[0xF3AA]=0x40;       //Bank3_Offset[15:8] 
+                        178                                     MOV             DPTR,#0xF3AA
+                        179                                     MOV             A,#0x40
+                        180                                     MOVX    @DPTR,A
+                        181     ;         Registers[0xF3AB]=0x02;       //Bank3_Offset[23:16] 
+                        182                                     MOV     A,#0x02
+                        183                                     INC             DPTR
+                        184                                     MOVX    @DPTR,A             
+                        185                                     ENDM
+                        186     
+                        187     SWITCH9         MACRO            ; Switch to Memory Bank #9
+                        188     ;         Registers[0xF3AA]=0x80;       //Bank3_Offset[15:8] 
+                        189                                     MOV             DPTR,#0xF3AA
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     4
+
+                        190                                     MOV             A,#0x80
+                        191                                     MOVX    @DPTR,A
+                        192     ;         Registers[0xF3AB]=0x02;       //Bank3_Offset[23:16] 
+                        193                                     MOV     A,#0x02
+                        194                                     INC             DPTR
+                        195                                     MOVX    @DPTR,A
+                        196                                     ENDM
+                        197     
+                        198     SWITCH10        MACRO            ; Switch to Memory Bank #10
+                        199     ;         Registers[0xF3AA]=0xc0;       //Ba8k3_Offset[15:8] 
+                        200                                     MOV             DPTR,#0xF3AA
+                        201                                     MOV             A,#0xc0
+                        202                                     MOVX    @DPTR,A
+                        203     ;         Registers[0xF3AB]=0x02;       //Bank3_Offset[23:16] 
+                        204                                     MOV     A,#0x02
+                        205                                     INC             DPTR
+                        206                                     MOVX    @DPTR,A             
+                        207                                     ENDM  
+                        208     
+                        209     SWITCH11        MACRO            ; Switch to Memory Bank #10
+                        210     ;         Registers[0xF3AA]=0x00;       //Ba8k3_Offset[15:8] 
+                        211                                     MOV             DPTR,#0xF3AA
+                        212                                     MOV             A,#0x00
+                        213                                     MOVX    @DPTR,A
+                        214     ;         Registers[0xF3AB]=0x03;       //Bank3_Offset[23:16] 
+                        215                                     MOV     A,#0x03
+                        216                                     INC             DPTR
+                        217                                     MOVX    @DPTR,A              
+                        218                                     ENDM 
+                        219     
+                        220     SWITCH12        MACRO            ; Switch to Memory Bank #10
+                        221     ;         Registers[0xF3AA]=0x40;       //Ba8k3_Offset[15:8] 
+                        222                                     MOV             DPTR,#0xF3AA
+                        223                                     MOV             A,#0x40
+                        224                                     MOVX    @DPTR,A
+                        225     ;         Registers[0xF3AB]=0x03;       //Bank3_Offset[23:16] 
+                        226                                     MOV     A,#0x03
+                        227                                     INC             DPTR
+                        228                                     MOVX    @DPTR,A               
+                        229                                     ENDM
+                        230                                     
+                        231     SWITCH13        MACRO            ; Switch to Memory Bank #10
+                        232     ;         Registers[0xF3AA]=0x80;       //Ba8k3_Offset[15:8] 
+                        233                                     MOV             DPTR,#0xF3AA
+                        234                                     MOV             A,#0x80
+                        235                                     MOVX    @DPTR,A
+                        236     ;         Registers[0xF3AB]=0x03;       //Bank3_Offset[23:16] 
+                        237                                     MOV     A,#0x03
+                        238                                     INC             DPTR
+                        239                                     MOVX    @DPTR,A               
+                        240                                     ENDM
+                        241                                     
+                        242     SWITCH14        MACRO            ; Switch to Memory Bank #10
+                        243     ;         Registers[0xF3AA]=0xc0;       //Ba8k3_Offset[15:8] 
+                        244                                     MOV             DPTR,#0xF3AA
+                        245                                     MOV             A,#0xc0
+                        246                                     MOVX    @DPTR,A
+                        247     ;         Registers[0xF3AB]=0x03;       //Bank3_Offset[23:16] 
+                        248                                     MOV     A,#0x03
+                        249                                     INC             DPTR
+                        250                                     MOVX    @DPTR,A               
+                        251                                     ENDM
+                        252     
+                        253     SWITCH15        MACRO            ; Switch to Memory Bank #10
+                        254     ;         Registers[0xF3AA]=0x00;       //Ba8k3_Offset[15:8] 
+                        255                                     MOV             DPTR,#0xF3AA
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     5
+
+                        256                                     MOV             A,#0x00
+                        257                                     MOVX    @DPTR,A
+                        258     ;         Registers[0xF3AB]=0x04;       //Bank3_Offset[23:16] 
+                        259                                     MOV     A,#0x04
+                        260                                     INC             DPTR
+                        261                                     MOVX    @DPTR,A              
+                        262                                     ENDM
+                        263                                     
+                        264     SWITCH16        MACRO            ; Switch to Memory Bank #10
+                        265     ;         Registers[0xF3AA]=0x40;       //Ba8k3_Offset[15:8] 
+                        266                                     MOV             DPTR,#0xF3AA
+                        267                                     MOV             A,#0x40
+                        268                                     MOVX    @DPTR,A
+                        269     ;         Registers[0xF3AB]=0x02;       //Bank3_Offset[23:16] 
+                        270                                     MOV     A,#0x04
+                        271                                     INC             DPTR
+                        272                                     MOVX    @DPTR,A              
+                        273                                     ENDM
+                        274                                     
+                        275     ;                                                                                       
+                                                 *
+                        276     ;                                                                             *
+                        277     ;-----------------------------------------------------------------------------*
+                        278     ENDIF;                                                                        *
+                        279     ;                                                                             *
+                                ENDIF;                                                                        *
+                        300     ;                                                                             *
+                        301     ;******************************************************************************
+                        302     ;                                                                             *
+                        303     ; THEORY OF OPERATION                                                         *
+                        304     ; -------------------                                                         *
+                        305     ; The section below describes the code generated by BL51 or LX51 and the      *
+                        306     ; operation of the L51_BANK.A51 module.  BL51/LX51 generates for each         *
+                        307     ; function that is located in a code memory bank and called from the common   *
+                        308     ; area or a different code bank and entry into the INTRABANK CALL TABLE.  The *
+                        309     ; INTRABANK CALL TABLE is located in the SEGMENT ?BANK?SELECT and listed in   *
+                        310     ; the Linker MAP file. The entries in that TABLE have the following format:   *
+                        311     ;                                                                             *
+                        312     ;   ?FCT?1:  MOV  DPTR,#FCT     ; Load Address of target FCT                  *
+                        313     ;            JMP  ?B_BANKn      ; Switch to Bank and Jump to Target Code      *
+                        314     ;                                                                             *
+                        315     ; Instead of directly calling the function FCT, the Linker changes the entry  *
+                        316     ; to ?FCT?1.  This entry selects the bank where the function FCT is located   *
+                        317     ; and calls that function via the routines defined in this L51_BANK.A51 file. *
+                        318     ; The L51_BANK.A51 file contains two sets of functions for each bank:         *
+                        319     ;                                                                             *
+                        320     ; ?B_BANKn    is a routine which saves the entry of the ?B_SWITCHn function   *
+                        321     ;             for the current active bank on the STACK and switches to the    *
+                        322     ;             bank 'n'.  Then it jumps to the address specified by the DPTR   *
+                        323     ;             register.  It is allowed to modify the following registers in   *
+                        324     ;             the ?B_BANKn routine:  A, B, R0, DPTR, PSW                      *
+                        325     ;                                                                             *
+                        326     ; ?B_SWITCHn  is a function which selects the bank 'n'.  This function is     *
+                        327     ;             used at the end of a user function to return to the calling     *
+                        328     ;             code bank.  Only the following registers may be altered in the  *
+                        329     ;             ?B_SWITCHn function:  R0, DPTR                                  *
+                        330     ;                                                                             *
+                        331     ; The current active bank is stored in ?B_CURRENTBANK.  RTX-51 uses this      *
+                        332     ; variable to restore the code bank after a task switch.  To get correct      *
+                        333     ; results, ?B_CURRENTBANK must be set to the code bank before the hardware    *
+                        334     ; switch is done, or the code banking sequences must be interrupt protected.  *
+                        335     ;******************************************************************************
+                        336     
+                        337                     NAME    ?BANK?SWITCHING
+                        338     
+                        339                     PUBLIC  ?B_NBANKS, ?B_MODE, ?B_CURRENTBANK, ?B_MASK
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     6
+
+                        340                     PUBLIC  ?B_FACTOR, ?B_RST_BANK
+                                ENDIF
+                        344     
+                        345     ; Standard SFR Symbols required in L51_BANK.A51
+ 00E0                   346     ACC     DATA    0E0H
+ 00F0                   347     B       DATA    0F0H
+ 0082                   348     DPL     DATA    82H
+ 0083                   349     DPH     DATA    83H
+ 00A8                   350     IE      DATA    0A8H
+ 00A8.7                 351     EA      BIT     IE.7
+                        352     
+                        353     
+                        354     ; generate Mask and Bank Number Information
+                                ELSEIF  ?B_NBANKS <= 16
+ 000F                   362       MASK          EQU     00001111B
+                                ENDIF                                                                     
+                        368     
+                        369     
+                        370     IF  ?B_MODE = 4 ;**************************************************************
+                        371     
+ 0000                   372     ?B_FACTOR       EQU     0               ; Dummy Declarations
+ 0000                   373     ?B_FIRSTBIT     EQU     0
+ 000F                   374     ?B_MASK         EQU     MASK
+                        375     
+------                  376     ?BANK?SELECT    SEGMENT CODE
+------                  377     ?BANK?DATA      SEGMENT DATA
+------                  378                     RSEG    ?BANK?DATA
+000000                  379     ?B_CURRENTBANK: DS      1
+                        380     
+                        381     BANK            MACRO   N
+                        382                     PUBLIC  ?B_BANK&N
+                        383     ?B_BANK&N:
+                        384                     PUSH    ?B_CURRENTBANK
+                        385                     MOV     A,#HIGH ?BANK?SWITCH
+                        386                     PUSH    ACC
+                        387                     PUSH    DPL
+                        388                     PUSH    DPH
+                        389                     ENDM
+                        390     
+                        391     SWITCH          MACRO   N
+                        392                     PUBLIC  ?B_SWITCH&N
+                        393       IF (LONG_MACRO = 1)
+                        394         ?B_SWITCHJ&N:
+                        395       ELSE
+                        396         ?B_SWITCH&N:
+                        397       ENDIF
+                        398                     CLR             EA                              ; EA disable
+                        399                     MOV     ?B_CURRENTBANK,#LOW ?B_SWITCH&N
+                        400                     MOV             A,0x10                  ; CURRENT OF BANK
+                        401                     XRL             A,#&N                   ; if (pre==current) don't switch
+                                (do nothing)
+                        402                     JZ              ?DONT_SWITCH&N
+                        403                     MOV             0x10,#&N                ; saving bank N         
+                        404     
+                        405                     SWITCH&N
+                        406     ;                       Registers[0xF1FD]=0x81; //Invalid iCache
+                        407                     MOV             DPTR,#0xF1FD
+                        408                     MOV             A,#0x81
+                        409                     MOVX    @DPTR,A
+                        410                                     
+                        411     ?DONT_SWITCH&N:
+                        412                     SETB    EA                              ; EA enable
+                        413                     RET
+                        414                     ENDM
+                        415     
+                        416       IF (LONG_MACRO = 1)
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     7
+
+                        417         SWITCHJ     MACRO   N
+                        418         ?B_SWITCH&N:
+                        419                     JMP     ?B_SWITCHJ&N
+                        420                     ENDM
+                        421       ENDIF
+                        422     
+------                  423     ?BANK?SWITCH    SEGMENT CODE PAGE
+                        424     
+------                  425                     RSEG    ?BANK?SWITCH
+ 0000                   426     B_SWITCH_START  EQU     $
+                        427     
+                        428       IF (LONG_MACRO = 1)
+                        429         ; Generate ?B_SWITCHn jmp table entries
+ 0000                   430         CNT         SET     0
+                        431     
+                        432                     REPT    ?B_NBANKS
+                        433                     SWITCHJ %CNT
+                        434         CNT         SET     CNT+1
+                        500       ENDIF
+                        501     
+                        502     
+                        503     ; Generate ?B_SWITCHn functions
+ 0000                   504     CNT             SET     0
+                        505     
+                        506                     REPT    ?B_NBANKS
+                        507                     BANK    %CNT
+                        508                     SWITCH  %CNT
+                        509     CNT             SET     CNT+1
+                       1151     
+ 02DB                  1152     B_SWITCH_SIZE   EQU     $-B_SWITCH_START
+                       1153     
+                                  ENDIF
+                       1157     
+                       1158     ENDIF  ; close block IF ?B_MODE = 4 *******************************************
+                       1159     
+------                 1160                     RSEG    ?BANK?SELECT
+                       1161     
+                       1162     ;************************  SWITCHBANK FUNCTION  *******************************
+                       1163     ;                                                                             *
+                       1164     ; SWITCHBANK allows use of bank-switching for C programs                      *
+                       1165     ;                                                                             *
+                       1166     ; prototype:   extern switchbank (unsigned char bank_number);                 *
+                       1167     ;                                                                             *
+                       1168     ;******************************************************************************
+                       1169                     PUBLIC  _SWITCHBANK, ?B_SWITCHBANK_A
+                       1170     
+000000 EF              1171     _SWITCHBANK:    MOV     A,R7
+                       1172     
+                       1173     
+                       1174     
+                       1175     IF  ?B_MODE = 4 ;**************************************************************
+                       1176     
+                                ENDIF
+                       1184     
+000001                 1185     ?B_SWITCHBANK_A:
+000001 900000     F    1186                     MOV     DPTR,#switch_tab
+000004 93              1187                     MOVC    A,@A+DPTR
+000005                 1188     ?B_RESTORE_BANK:                       ; entry for RTX-51/XBANKING bank restore
+000005 900000     F    1189                     MOV     DPTR,#?BANK?SWITCH
+000008 73              1190                     JMP     @A+DPTR
+                       1191     
+                       1192     S_ENTRY         MACRO   N
+                       1193                     DB      LOW ?B_SWITCH&N
+                       1194                     ENDM
+                       1195     
+000009                 1196     switch_tab:     
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     8
+
+ 0000                  1197     CNT             SET     0
+                       1198     
+                       1199                     REPT    ?B_NBANKS
+                       1200                     S_ENTRY %CNT
+                       1201     CNT             SET     CNT+1
+                       1251     ENDIF  ; close block IF ?B_MODE = 4 *******************************************
+                       1252     
+                       1253     
+                       1254     
+                       1255                     END
+                       1256     
+                       1257     
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE     9
+
+SYMBOL TABLE LISTING
+------ ----- -------
+
+
+N A M E                       T Y P E  V A L U E     ATTRIBUTES
+
+?B_BANK0 . . . . . . . . . .  C  ADDR  002EH     R   SEG=?BANK?SWITCH
+?B_BANK1 . . . . . . . . . .  C  ADDR  0058H     R   SEG=?BANK?SWITCH
+?B_BANK10. . . . . . . . . .  C  ADDR  01D9H     R   SEG=?BANK?SWITCH
+?B_BANK11. . . . . . . . . .  C  ADDR  0204H     R   SEG=?BANK?SWITCH
+?B_BANK12. . . . . . . . . .  C  ADDR  022FH     R   SEG=?BANK?SWITCH
+?B_BANK13. . . . . . . . . .  C  ADDR  025AH     R   SEG=?BANK?SWITCH
+?B_BANK14. . . . . . . . . .  C  ADDR  0285H     R   SEG=?BANK?SWITCH
+?B_BANK15. . . . . . . . . .  C  ADDR  02B0H     R   SEG=?BANK?SWITCH
+?B_BANK2 . . . . . . . . . .  C  ADDR  0082H     R   SEG=?BANK?SWITCH
+?B_BANK3 . . . . . . . . . .  C  ADDR  00ACH     R   SEG=?BANK?SWITCH
+?B_BANK4 . . . . . . . . . .  C  ADDR  00D7H     R   SEG=?BANK?SWITCH
+?B_BANK5 . . . . . . . . . .  C  ADDR  0102H     R   SEG=?BANK?SWITCH
+?B_BANK6 . . . . . . . . . .  C  ADDR  012DH     R   SEG=?BANK?SWITCH
+?B_BANK7 . . . . . . . . . .  C  ADDR  0158H     R   SEG=?BANK?SWITCH
+?B_BANK8 . . . . . . . . . .  C  ADDR  0183H     R   SEG=?BANK?SWITCH
+?B_BANK9 . . . . . . . . . .  C  ADDR  01AEH     R   SEG=?BANK?SWITCH
+?B_CURRENTBANK . . . . . . .  D  ADDR  0000H     R   SEG=?BANK?DATA
+?B_FACTOR. . . . . . . . . .  N  NUMB  0000H     A   
+?B_FIRSTBIT. . . . . . . . .  N  NUMB  0000H     A   
+?B_MASK. . . . . . . . . . .  N  NUMB  000FH     A   
+?B_MODE. . . . . . . . . . .  N  NUMB  0004H     A   
+?B_NBANKS. . . . . . . . . .  N  NUMB  0010H     A   
+?B_RESTORE_BANK. . . . . . .  C  ADDR  0005H     R   SEG=?BANK?SELECT
+?B_RST_BANK. . . . . . . . .  N  NUMB  0000H     A   
+?B_RTX . . . . . . . . . . .  N  NUMB  0000H     A   
+?B_SWITCH0 . . . . . . . . .  C  ADDR  0000H     R   SEG=?BANK?SWITCH
+?B_SWITCH1 . . . . . . . . .  C  ADDR  0002H     R   SEG=?BANK?SWITCH
+?B_SWITCH10. . . . . . . . .  C  ADDR  001CH     R   SEG=?BANK?SWITCH
+?B_SWITCH11. . . . . . . . .  C  ADDR  001FH     R   SEG=?BANK?SWITCH
+?B_SWITCH12. . . . . . . . .  C  ADDR  0022H     R   SEG=?BANK?SWITCH
+?B_SWITCH13. . . . . . . . .  C  ADDR  0025H     R   SEG=?BANK?SWITCH
+?B_SWITCH14. . . . . . . . .  C  ADDR  0028H     R   SEG=?BANK?SWITCH
+?B_SWITCH15. . . . . . . . .  C  ADDR  002BH     R   SEG=?BANK?SWITCH
+?B_SWITCH2 . . . . . . . . .  C  ADDR  0004H     R   SEG=?BANK?SWITCH
+?B_SWITCH3 . . . . . . . . .  C  ADDR  0007H     R   SEG=?BANK?SWITCH
+?B_SWITCH4 . . . . . . . . .  C  ADDR  000AH     R   SEG=?BANK?SWITCH
+?B_SWITCH5 . . . . . . . . .  C  ADDR  000DH     R   SEG=?BANK?SWITCH
+?B_SWITCH6 . . . . . . . . .  C  ADDR  0010H     R   SEG=?BANK?SWITCH
+?B_SWITCH7 . . . . . . . . .  C  ADDR  0013H     R   SEG=?BANK?SWITCH
+?B_SWITCH8 . . . . . . . . .  C  ADDR  0016H     R   SEG=?BANK?SWITCH
+?B_SWITCH9 . . . . . . . . .  C  ADDR  0019H     R   SEG=?BANK?SWITCH
+?B_SWITCHBANK_A. . . . . . .  C  ADDR  0001H     R   SEG=?BANK?SELECT
+?B_SWITCHJ0. . . . . . . . .  C  ADDR  0038H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ1. . . . . . . . .  C  ADDR  0062H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ10 . . . . . . . .  C  ADDR  01E3H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ11 . . . . . . . .  C  ADDR  020EH     R   SEG=?BANK?SWITCH
+?B_SWITCHJ12 . . . . . . . .  C  ADDR  0239H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ13 . . . . . . . .  C  ADDR  0264H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ14 . . . . . . . .  C  ADDR  028FH     R   SEG=?BANK?SWITCH
+?B_SWITCHJ15 . . . . . . . .  C  ADDR  02BAH     R   SEG=?BANK?SWITCH
+?B_SWITCHJ2. . . . . . . . .  C  ADDR  008CH     R   SEG=?BANK?SWITCH
+?B_SWITCHJ3. . . . . . . . .  C  ADDR  00B6H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ4. . . . . . . . .  C  ADDR  00E1H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ5. . . . . . . . .  C  ADDR  010CH     R   SEG=?BANK?SWITCH
+?B_SWITCHJ6. . . . . . . . .  C  ADDR  0137H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ7. . . . . . . . .  C  ADDR  0162H     R   SEG=?BANK?SWITCH
+?B_SWITCHJ8. . . . . . . . .  C  ADDR  018DH     R   SEG=?BANK?SWITCH
+?B_SWITCHJ9. . . . . . . . .  C  ADDR  01B8H     R   SEG=?BANK?SWITCH
+?B_VAR_BANKING . . . . . . .  N  NUMB  0000H     A   
+?BANK?DATA . . . . . . . . .  D  SEG   000001H       REL=UNIT, ALN=BYTE
+AX51 MACRO ASSEMBLER  BANK_SWITCH                                                           06/16/17 08:24:30 PAGE    10
+
+?BANK?SELECT . . . . . . . .  C  SEG   000019H       REL=UNIT, ALN=BYTE
+?BANK?SWITCH . . . . . . . .  C  SEG   0002DBH       REL=UNIT, ALN=PAGE
+?BANK?SWITCHING. . . . . . .  -- ----  -------       
+?DONT_SWITCH0. . . . . . . .  C  ADDR  0055H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH1. . . . . . . .  C  ADDR  007FH     R   SEG=?BANK?SWITCH
+?DONT_SWITCH10 . . . . . . .  C  ADDR  0201H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH11 . . . . . . .  C  ADDR  022CH     R   SEG=?BANK?SWITCH
+?DONT_SWITCH12 . . . . . . .  C  ADDR  0257H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH13 . . . . . . .  C  ADDR  0282H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH14 . . . . . . .  C  ADDR  02ADH     R   SEG=?BANK?SWITCH
+?DONT_SWITCH15 . . . . . . .  C  ADDR  02D8H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH2. . . . . . . .  C  ADDR  00A9H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH3. . . . . . . .  C  ADDR  00D4H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH4. . . . . . . .  C  ADDR  00FFH     R   SEG=?BANK?SWITCH
+?DONT_SWITCH5. . . . . . . .  C  ADDR  012AH     R   SEG=?BANK?SWITCH
+?DONT_SWITCH6. . . . . . . .  C  ADDR  0155H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH7. . . . . . . .  C  ADDR  0180H     R   SEG=?BANK?SWITCH
+?DONT_SWITCH8. . . . . . . .  C  ADDR  01ABH     R   SEG=?BANK?SWITCH
+?DONT_SWITCH9. . . . . . . .  C  ADDR  01D6H     R   SEG=?BANK?SWITCH
+_SWITCHBANK. . . . . . . . .  C  ADDR  0000H     R   SEG=?BANK?SELECT
+ACC. . . . . . . . . . . . .  D  ADDR  00E0H     A   
+B. . . . . . . . . . . . . .  D  ADDR  00F0H     A   
+B_SWITCH_SIZE. . . . . . . .  N  NUMB  02DBH     A   
+B_SWITCH_START . . . . . . .  C  ADDR  0000H     R   SEG=?BANK?SWITCH
+CNT. . . . . . . . . . . . .  N  NUMB  0010H     A   
+DPH. . . . . . . . . . . . .  D  ADDR  0083H     A   
+DPL. . . . . . . . . . . . .  D  ADDR  0082H     A   
+EA . . . . . . . . . . . . .  B  ADDR  00A8H.7   A   
+IE . . . . . . . . . . . . .  D  ADDR  00A8H     A   
+LONG_MACRO . . . . . . . . .  N  NUMB  0001H     A   
+MASK . . . . . . . . . . . .  N  NUMB  000FH     A   
+SWITCH_TAB . . . . . . . . .  C  ADDR  0009H     R   SEG=?BANK?SELECT
+
+
+REGISTER BANK(S) USED: 0 
+
+
+ASSEMBLY COMPLETE.  0 WARNING(S), 0 ERROR(S).

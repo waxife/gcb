@@ -1,0 +1,29 @@
+C51 COMPILER V7.50   VERSION                                                               06/16/2017 08:24:32 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE VERSION
+OBJECT MODULE PLACED IN .\Object\version.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\version.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;.
+                    -.\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\version.lst) TABS(2) OBJECT(.\Object\version.obj)
+
+line level    source
+
+   1          const char code ver[] = {0x00, 0x00}; //ver0.0
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   ----    ----
+   CONSTANT SIZE    =      2    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

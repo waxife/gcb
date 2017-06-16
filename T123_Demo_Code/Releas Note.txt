@@ -1,0 +1,9 @@
+----------------------
+T123_Demo_Code v0.71 2012/11/30
+----------------------
+1. Remove "touch clear" function for touch slide.
+
+----------------------
+T123_Demo_Code v0.70 2012/11/09
+----------------------
+1. First standard release.

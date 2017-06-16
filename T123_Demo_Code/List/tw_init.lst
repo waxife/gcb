@@ -1,0 +1,114 @@
+C51 COMPILER V7.50   TW_INIT                                                               06/16/2017 08:24:40 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE TW_INIT
+OBJECT MODULE PLACED IN .\Object\tw_init.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\sys\tw_init.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sy
+                    -s;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\tw_init.lst) TABS(2) OBJECT(.\Object\tw_init.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   tw_init.c
+   3           *  @brief  tw system init entry
+   4           *  $Id: tw_init.c,v 1.11 2013/11/21 09:03:44 onejoe Exp $
+   5           *  $Author: onejoe $
+   6           *  $Revision: 1.11 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "reg_tw.h"
+  16          
+  17          #ifdef ENABLE_BANK_SWITCH
+  18          /* System Global Variable for Current Bank */
+  19          unsigned char data CURRENTBANK  _at_ 0x10;
+  20          #endif
+  21          
+  22          #ifndef ENABLE_EX_MCU
+  23          unsigned long code LAYOUT_MAGIC   _at_ LAYOUT_MAGIC_ADDR;
+  24          unsigned long code LAYOUT_TEXTSTART _at_ LAYOUT_TEXTSTART_ADDR;
+  25          unsigned long code LAYOUT_TEXTSIZE  _at_ LAYOUT_TEXTSIZE_ADDR;
+  26          unsigned long code LAYOUT_USERSTART _at_ LAYOUT_USERSTART_ADDR;
+  27          unsigned long code LAYOUT_USERSIZE  _at_ LAYOUT_USERSIZE_ADDR;
+  28          unsigned long code LAYOUT_RESSTART  _at_ LAYOUT_RESSTART_ADDR;
+  29          unsigned long code LAYOUT_RESSIZE   _at_ LAYOUT_RESSIZE_ADDR;
+  30          unsigned short code LAYOUT_TP_LEFT  _at_ LAYOUT_TP_LEFT_ADDR;
+  31          unsigned short code LAYOUT_TP_RIGHT  _at_ LAYOUT_TP_RIGHT_ADDR;
+  32          unsigned short code LAYOUT_TP_UP    _at_ LAYOUT_TP_UP_ADDR;
+  33          unsigned short code LAYOUT_TP_DOWN  _at_ LAYOUT_TP_DOWN_ADDR;
+  34          unsigned char code LAYOUT_TP_FINISH _at_ LAYOUT_TP_FINISH_ADDR;
+  35          unsigned short code LAYOUT_PATCH     _at_ LAYOUT_TP_FINISH_ADDR+1; 
+  36          #endif
+  37          
+  38          void ACE_init(void)
+  39          {
+  40   1        /* ACE_DDB_GAIN */
+  41   1        IC_WritByte(TWIC_P3, 0x7E, 0x84);
+  42   1       
+  43   1        /* ACE_CTRL */ //enable ACE
+  44   1        IC_WritByte(TWIC_P3, 0x7F, 0xE0);
+  45   1      
+  46   1        /* ACE_GAIN */
+  47   1        IC_WritByte(TWIC_P3, 0x7C, 0x80);
+  48   1      }
+  49          
+  50          void tw_init (void)
+  51          {
+  52   1        /* power on BIAS  */
+  53   1        IC_WritByte(TWIC_P0, 0xE3, 0x80);
+  54   1          
+C51 COMPILER V7.50   TW_INIT                                                               06/16/2017 08:24:40 PAGE 2   
+
+  55   1        /* power on DPLL */
+  56   1        IC_WritByte(TWIC_P0, 0xCA, IC_ReadByte(TWIC_P0, 0x0CA)| 0x20);
+  57   1        
+  58   1        /* power on Total Pad */
+  59   1        IC_WritByte(TWIC_P0,0xE0,(IC_ReadByte(TWIC_P0,0xE0) | 0x80));
+  60   1      
+  61   1        /* disable shadow */
+  62   1        IC_WritByte(TWIC_P0,0xE2, 0x00);
+  63   1        
+  64   1        /* turn on free run */
+  65   1        IC_WritByte(TWIC_P0,0xC2,0x12);
+  66   1        
+  67   1        /* ORAM IO WaitState */
+  68   1      #ifndef ENABLE_EX_MCU
+  69   1        IC_WritByte(TWIC_P1,0xFE,0xAD);
+  70   1      #else
+                #ifdef ENABLE_RECIVER_CPUINT
+                /* pin function select CPUINT */
+                IC_WritByte(TWIC_P1,0xAC, (IC_ReadByte(TWIC_P1,0xAC) & 0xFC));
+                #endif
+                IC_WritByte(TWIC_P1,0xFE,0x2D);
+              #endif
+  77   1      
+  78   1        /* ACE reset  */
+  79   1        IC_WritByte(TWIC_P3, 0x7D, (IC_ReadByte(TWIC_P3,0x7D) | 0x80));
+  80   1        twdDelay(10);
+  81   1        IC_WritByte(TWIC_P3, 0x7D, (IC_ReadByte(TWIC_P3,0x7D) & 0x7F));
+  82   1      
+  83   1      }
+  84          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    164    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

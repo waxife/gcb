@@ -1,0 +1,172 @@
+C51 COMPILER V7.50   SARKEY                                                                06/16/2017 08:24:36 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE SARKEY
+OBJECT MODULE PLACED IN .\Object\sarkey.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\sarkey.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib
+                    -\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\sarkey.lst) TABS(2) OBJECT(.\Object\sarkey.obj)
+
+line level    source
+
+   1          /*
+   2           *  @file   sarkey.c
+   3           *  @brief  SAR Key driver 
+   4           *  $Id: sarkey.c,v 1.4 2013/06/18 02:04:23 kevin Exp $
+   5           *  $Author: kevin $
+   6           *  $Revision: 1.4 $
+   7           *
+   8           *  Copyright (c) 2012 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2012/06/11  yc New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "reg_tw.h"
+  16          #include "iccontrol.h"
+  17          #include "tw_irq.h"
+  18          #include "sarkey.h"
+  19          //#include "debug.h"
+  20          
+  21          static unsigned char squeue[SARKEY_BUFF_SIZE];
+  22          static unsigned char sfront=SARKEY_BUFF_SIZE-1; 
+  23          static unsigned char srear=SARKEY_BUFF_SIZE-1;
+  24          static unsigned char SarRepeat;
+  25          static unsigned char sarcount;
+  26          /*
+  27           * 摘要 :void CheckSAR(void)
+  28           *
+  29           * 描述 :SARKEY 中断处理程序
+  30           *
+  31           * 参数 :无
+  32           *
+  33           * 回传值 : 无
+  34           *
+  35           * 注意 : 无
+  36          */
+  37          void CheckSAR(void)
+  38          {
+  39   1        unsigned char value=0x00;
+  40   1        value=IC_ReadByte(TWIC_P3, 0x24);
+  41   1        #if 1
+  42   1        if((value>=(SARKEY_TVAL1-5))&&(value<=(SARKEY_TVAL1+5)))
+  43   1        {
+  44   2          value=0x01;
+  45   2        }
+  46   1        else if((value>=(SARKEY_TVAL2-5))&&(value<=(SARKEY_TVAL2+5)))
+  47   1        {
+  48   2          value=0x02;
+  49   2        }
+  50   1        else if((value>=(SARKEY_TVAL3-5))&&(value<=(SARKEY_TVAL3+5)))
+  51   1        {
+  52   2          value=0x03;
+  53   2        }
+  54   1        else if((value>=(SARKEY_TVAL4-5))&&(value<=(SARKEY_TVAL4+5)))
+C51 COMPILER V7.50   SARKEY                                                                06/16/2017 08:24:36 PAGE 2   
+
+  55   1        {
+  56   2          value=0x04;
+  57   2        }
+  58   1        else if((value>=(SARKEY_TVAL5-5))&&(value<=(SARKEY_TVAL5+5)))
+  59   1        {
+  60   2          value=0x05;
+  61   2        }
+  62   1        else if((value>=(SARKEY_TVAL6-5))&&(value<=(SARKEY_TVAL6+5)))
+  63   1        {
+  64   2          value=0x06;
+  65   2        }
+  66   1        else
+  67   1        {
+  68   2          goto EXIT;
+  69   2        }
+  70   1        #endif
+  71   1      
+  72   1        srear=(srear+1)%SARKEY_BUFF_SIZE;
+  73   1        if(srear==sfront)
+  74   1        {
+  75   2          if(srear==0)
+  76   2          {
+  77   3            srear=10-1;//max value
+  78   3          }
+  79   2          else
+  80   2          {
+  81   3            srear=srear-1;
+  82   3          }
+  83   2        }
+  84   1        else
+  85   1        {
+  86   2          squeue[srear]=value;
+  87   2        }
+  88   1        SarRepeat=1;//check repeat key by time interrupt  
+  89   1        if(value==0xff)
+  90   1          SarRepeat=0;
+  91   1        twdDelay(500);
+  92   1      EXIT:
+  93   1        clear_tw_irq(IRQ_SAR1_TOGGLE);  
+  94   1      }
+  95          
+  96          /*
+  97           * 摘要 :unsigned char SARscan(unsigned char *value)
+  98           *
+  99           * 描述 :从SARKEY取值
+ 100           *
+ 101           * 参数 :unsigned char *value =>会将SARKEY值给到 *value
+ 102           *
+ 103           * 回传值 : 0=>无资料 1=>有资料
+ 104           *
+ 105           * 注意 : 无
+ 106          */
+ 107          unsigned char SARscan(unsigned char *value)
+ 108          {
+ 109   1        unsigned char temp;
+ 110   1        if(sfront==srear)
+ 111   1        {
+ 112   2          return 0;
+ 113   2        }
+ 114   1        else
+ 115   1        {
+ 116   2            sfront=(sfront+1)%SARKEY_BUFF_SIZE;
+C51 COMPILER V7.50   SARKEY                                                                06/16/2017 08:24:36 PAGE 3   
+
+ 117   2            temp=squeue[sfront];
+ 118   2            *value=temp;
+ 119   2            return 1;
+ 120   2        }
+ 121   1      }
+ 122          /*
+ 123           * 摘要 :void sarkey_init()
+ 124           *
+ 125           * 描述 :SARKEY 初始化
+ 126           *
+ 127           * 参数 :无
+ 128           *
+ 129           * 回传值 : 无
+ 130           *
+ 131           * 注意 : 无
+ 132          */
+ 133          void sarkey_init()
+ 134          {
+ 135   1        IC_WritByte(TWIC_P3,0X23,IC_ReadByte(TWIC_P3,0x23)|0x02);//POWER UP
+ 136   1        IC_WritByte(TWIC_P3,0X23,IC_ReadByte(TWIC_P3,0x23)|0x01);//Enable debounce
+ 137   1        IC_WritByte(TWIC_P3,0X25,0X15);//THRESHOLD
+ 138   1        
+ 139   1        enable_tw_irq(IRQ_SAR1_TOGGLE); 
+ 140   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    282    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     14    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

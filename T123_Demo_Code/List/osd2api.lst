@@ -1,0 +1,1609 @@
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE OSD2API
+OBJECT MODULE PLACED IN .\Object\osd2api.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\osd2api.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_li
+                    -b\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\osd2api.lst) TABS(2) OBJECT(.\Object\osd2api.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   osd2api.c
+   3           *  @brief  terawins OSD2 control function
+   4           *  $Id: osd2api.c,v 1.25 2013/08/01 05:22:09 lym Exp $
+   5           *  $Author: lym $
+   6           *  $Revision: 1.25 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "reg_tw.h"
+  16          #include "iccontrol.h"
+  17          #include "cq.h"
+  18          #include "spirw.h"
+  19          #include "osd2api.h"  
+  20          #include "tw_widget_sys.h"
+  21          #include "tw_irq.h"
+  22          #include "cq.h"
+  23          
+  24          #define USE_CQ_WRITE
+  25          #define FIX_FOR_GLOBAL_SHADOW
+  26          //#define DEBUG_OSD2
+  27          //#define OSD_BENCHMARK
+  28          
+  29          
+  30          static unsigned char OSD2_IS_ENABLE= DISABLE;
+  31          
+  32          /*
+  33           * Synopsis     void osd_set_location_addr( unsigned char x,    
+  34           *                      unsigned char y,
+  35           *                      unsigned short address,
+  36           *                      unsigned char width);
+  37           * Description  設定ORAM之寫入位置於某OSD2 Menu之座標位置.
+  38           * Parameters   x       - x 位置 
+  39           *              y       - y 位置
+  40           *              address   - OSD2 Menu 位址
+  41           *              width   - OSD2 Menu 寬度(tile數量)
+  42           * Return       none
+  43           */
+  44          void osd_set_location_addr(unsigned char x, unsigned char y, unsigned short address, unsigned char width)
+  45          { 
+  46   1        address = address + ((width + 4) * y + x + 4);
+  47   1                              
+  48   1        IC_WRITBYTE(TWIC_P0, 0xAA, (unsigned char)(address & 0xff));
+  49   1        IC_WRITBYTE(TWIC_P0, 0xAA, (unsigned char)(address>>8));                
+  50   1      #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_set_location_addr %bu, %bu (0x%04hX) \n", x, y, address));
+              #endif
+  53   1      }
+  54          
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 2   
+
+  55          /*
+  56           * Synopsis     unsigned char osd_cfg_read( unsigned char index );
+  57           * Description  讀取OSD2設定暫存器.
+  58           * Parameters   index       - OSD2設定暫存器編號
+  59           * Return       暫存器數值
+  60           */
+  61          unsigned char osd_cfg_read(unsigned char index)
+  62          {
+  63   1        IC_WRITBYTE(TWIC_P0, 0xA8, index);
+  64   1        return IC_READBYTE(TWIC_P0, 0xA9);
+  65   1      }
+  66          
+  67          /* config OSD register */
+  68          
+  69          /*
+  70           * Synopsis     osd_cfg_wr( unsigned char index, 
+  71           *                          unsigned char dat);    
+  72           * Description  寫入OSD2設定暫存器. 
+  73           * Parameters   index       - OSD2設定暫存器位置 
+  74           *              dat           - 數值
+  75           * Return       none
+  76           */
+  77          void osd_cfg_wr(unsigned char index , unsigned char dat)
+  78          {
+  79   1        IC_WRITBYTE(TWIC_P0, 0xA8, index);
+  80   1        IC_WRITBYTE(TWIC_P0, 0xA9, dat);
+  81   1      #ifdef  DEBUG_OSD2
+                dbg(0, ("osd_cfg_wr 0x%bX, 0x%bX \n", index, dat));
+              #endif
+  84   1      }
+  85          
+  86          /* set OSD RAM address port of starting Access */
+  87          
+  88          /*
+  89           * Synopsis     void osd_set_ram_addr( unsigned short address );    
+  90           * Description  設定ORAM之寫入位置
+  91           * Parameters   address   - ORAM位址
+  92           * Return       none
+  93           */
+  94          void osd_set_ram_addr(unsigned short address)
+  95          {
+  96   1          /* word access, LSB first, then MSB byte */
+  97   1        IC_WRITBYTE(TWIC_P0, 0xAA, (unsigned char)(address & 0xff));
+  98   1        IC_WRITBYTE(TWIC_P0, 0xAA, (unsigned char)(address>>8));
+  99   1      
+ 100   1      #ifdef  DEBUG_OSD2
+                dbg(0, ("osd_set_ram_addr 0x%X \n", address) );
+              #endif
+ 103   1      }
+ 104          
+ 105          /* access(write) data 2 OSD RAM */
+ 106          
+ 107          /*
+ 108           * Synopsis     void osd_set_ram_data(unsigned short wdata);   
+ 109           * Description  寫入ORAM
+ 110           * Parameters   wdata   -寫入數值(1 WORD)
+ 111           * Return       none
+ 112           */
+ 113          void osd_set_ram_data(unsigned short wdata)
+ 114          {
+ 115   1        /* word access, LSB first, then MSB byte */
+ 116   1        OSD_SET_RAM_DATA(wdata);
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 3   
+
+ 117   1        //IC_WRITBYTE(TWIC_P0, 0xAB, (unsigned char)(wdata & 0xff));
+ 118   1          //IC_WRITBYTE(TWIC_P0, 0xAB, (unsigned char)(wdata>>8));
+ 119   1      
+ 120   1      #ifdef  DEBUG_OSD2
+                dbg(0, ("osd_set_ram_data 0x%X \n", wdata));
+              #endif
+ 123   1      }    
+ 124          
+ 125          /*
+ 126           * Synopsis     osd_set_ram_data_byte(unsigned char dat);   
+ 127           * Description  寫入ORAM
+ 128           * Parameters   dat   -寫入數值(1 BYTE)
+ 129           * Return       none
+ 130           */
+ 131          void osd_set_ram_data_byte(unsigned char dat)
+ 132          {        
+ 133   1        IC_WRITBYTE(TWIC_P0, 0xAB, dat);
+ 134   1      
+ 135   1      #ifdef  DEBUG_OSD2
+                dbg(0, ("osd_set_ram_data_byte 0x%bX \n", dat));
+              #endif
+ 138   1      }
+ 139          
+ 140          /*
+ 141           * Synopsis     osd_oram_fill(unsigned short start_address, 
+ 142           *                            unsigned short length, 
+ 143           *                            unsigned short dat);   
+ 144           * Description  將某區段ORAM填入特定數值
+ 145           * Parameters   start_address -起始位置
+ 146           *              length          -數量
+ 147           *              dat             -寫入數值(1 WORD)
+ 148           * Return       none
+ 149           */
+ 150          void osd_oram_fill(unsigned short start_address, unsigned short length, unsigned short dat)
+ 151          {                  
+ 152   1        unsigned short count = 0; 
+ 153   1      
+ 154   1        if(length > 0x4000)
+ 155   1        {
+ 156   2          ERROR (("osd_oram_fill: length too long.\n"));  
+ 157   2          return;
+ 158   2        }
+ 159   1         
+ 160   1        OSD_CFG_WR(0x40, (dat & 0x00ff));                  //WriteData
+ 161   1        OSD_CFG_WR(0x41, ((dat & 0xff00)>>8));
+ 162   1        OSD_CFG_WR(0x42, (start_address & 0x00ff));        //Start addr
+ 163   1        OSD_CFG_WR(0x43, ((start_address & 0xff00)>>8));  
+ 164   1      
+ 165   1        OSD_CFG_WR(0x44, (length & 0x00ff));
+ 166   1        OSD_CFG_WR(0x45, (((length & 0xff00)>>8) | 0x80));   
+ 167   1      
+ 168   1        while(!(IC_READBYTE(TWIC_P0, 0xa9) & 0x80)) 
+ 169   1        {
+ 170   2          count++;
+ 171   2          if(count > 10240)
+ 172   2          {
+ 173   3            ERROR (("osd_oram_fill: time out.\n")); 
+ 174   3            return;
+ 175   3          }
+ 176   2        }
+ 177   1      }
+ 178          
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 4   
+
+ 179          /*
+ 180           * Synopsis     osd_benchmark (void)   
+ 181           * Description  將ORAM填入測試資料
+ 182           * Return       none
+ 183           */
+ 184          
+ 185          #ifdef OSD_BENCHMARK
+              #include <radio_page.h>
+              #define MENU_ORAM_START_ADDR  0x3750
+              #define ROW1_FONTS_BASE_ADDR  MENU_ORAM_START_ADDR+4
+              #define ROW_CHAR_NUM      0x36
+              #define ADDR(Y)         (ROW1_FONTS_BASE_ADDR + (Y*ROW_CHAR_NUM))
+              void osd_benchmark (void)
+              {
+                unsigned char data i, j, x, y, dat;
+                  extern void radio_menu_draw (void);
+                radio_menu_draw ();
+              
+                osd_enable();
+                mute_tw_irq();
+                DBG_PRINT ("OSD Benchmark ");
+              
+                /* clear OSD RAM */
+                osd_oram_fill(MENU_ORAM_START_ADDR, 0x0438, 0x0000);
+                for(i=0; i<20; i++) {
+                  OSD_SET_RAM_ADDR(MENU_ORAM_START_ADDR+(i*ROW_CHAR_NUM));
+                  if(i==0)
+                    OSD_SET_RAM_DATA(0x4002);
+                  else
+                    OSD_SET_RAM_DATA(0xE000);
+                  OSD_SET_RAM_DATA(0x6062);
+                  OSD_SET_RAM_DATA(0xD000);
+                  OSD_SET_RAM_DATA(0x0032);
+                }
+              
+                for (i = 0; i < 100; i++) {
+                  dat = i % 2 == 0 ? 54 : 55;
+                  for (j = 0; j < 100; j++) {
+                    for (y = 0; y < 20; y++) {
+                      OSD_SET_RAM_ADDR (ADDR(y));
+                      for (x = 0; x < 49; x++) {
+                        OSD_SET_RAM_DATA(dat);
+                      }
+                    }
+                  }
+                      DBG_PRINT (".");
+                }
+              
+                DBG_PRINT ("\n");
+                restore_tw_irq();
+                  osd_disable();
+              }
+              #endif
+ 232          
+ 233          /*
+ 234           * Synopsis     void osd_init()   
+ 235           * Description  OSD功能初始化
+ 236           * Return       none
+ 237           */
+ 238          void osd_init()
+ 239          {
+ 240   1      #ifdef OSD_BENCHMARK
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 5   
+
+                  osd_benchmark();
+              #endif
+ 243   1        /* OSD Disable */
+ 244   1          osd_disable();
+ 245   1        /* clear OSD RAM */
+ 246   1        osd_ram_clear();
+ 247   1      }
+ 248          
+ 249          /*
+ 250           * Synopsis     void osd_ram_clear()   
+ 251           * Description  清除ORAM資料
+ 252           * Return       none
+ 253           */
+ 254          void osd_ram_clear()
+ 255          {
+ 256   1        /* clear OSD RAM */
+ 257   1        osd_oram_fill(0x0000, 0x3FFF, 0x0000);
+ 258   1      }
+ 259          
+ 260          /*
+ 261           * Synopsis     void osd_menu1_enable(void) 
+ 262           * Description  顯示osd2 menu1
+ 263           * Return       none
+ 264           */
+ 265          void osd_menu1_enable(void)
+ 266          {
+ 267   1      #ifdef USE_CQ_WRITE
+ 268   1        char rc=0;
+ 269   1      
+ 270   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x10);
+ 271   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x80);
+ 272   1      
+ 273   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 274   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x80);
+ 275   1        if(rc<0)  
+ 276   1          ERROR (("cq_write_byte()\n"));
+ 277   1        if (cq_flush_vsync () < 0)
+ 278   1          ERROR (("cq_flush()\n"));
+ 279   1      #else
+                OSD_CFG_WR(0x10,0x80);    // menu1 enable
+                OSD_CFG_WR(0x00,0x80);    // OSD1 enable
+                IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              #endif
+ 284   1        OSD2_IS_ENABLE= ENABLE;
+ 285   1      }
+ 286          
+ 287          /*
+ 288           * Synopsis     void osd_menu1_disable(void)  
+ 289           * Description  關閉osd2 menu1
+ 290           * Return       none
+ 291           */
+ 292          void osd_menu1_disable(void)
+ 293          {
+ 294   1      #ifdef USE_CQ_WRITE 
+ 295   1        char rc=0;  
+ 296   1          rc = cq_write_byte(TWIC_P0, 0xA8, 0x10);
+ 297   1          rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 298   1      
+ 299   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 300   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 301   1        if(rc<0)  
+ 302   1          ERROR (("cq_write_byte()\n"));
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 6   
+
+ 303   1        if (cq_flush_vsync () < 0)
+ 304   1          ERROR (("cq_flush()\n"));
+ 305   1      #else
+                OSD_CFG_WR(0x10,0x00);    // menu1 disable
+                OSD_CFG_WR(0x00,0x00);    // OSD1 disable
+                IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              #endif
+ 310   1        //OSD2_IS_ENABLE= DISABLE;
+ 311   1      }
+ 312          
+ 313          /*
+ 314           * Synopsis     void osd_menu2_enable(void)  
+ 315           * Description  顯示osd2 menu2
+ 316           * Return       none
+ 317           */
+ 318          void osd_menu2_enable(void)
+ 319          {
+ 320   1      #ifdef USE_CQ_WRITE
+ 321   1        char rc=0;
+ 322   1      
+ 323   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x18);
+ 324   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x80);
+ 325   1      
+ 326   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 327   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x80);
+ 328   1        if(rc<0)  
+ 329   1          ERROR (("cq_write_byte()\n"));
+ 330   1        if (cq_flush_vsync () < 0)
+ 331   1          ERROR (("cq_flush()\n"));
+ 332   1      #else
+                OSD_CFG_WR(0x10,0x80);    // menu1 enable
+                OSD_CFG_WR(0x00,0x80);    // OSD1 enable
+                IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              #endif
+ 337   1        OSD2_IS_ENABLE= ENABLE;
+ 338   1      }
+ 339          
+ 340          /*
+ 341           * Synopsis     void osd_menu2_enable(void)  
+ 342           * Description  關閉osd2 menu2
+ 343           * Return       none
+ 344           */
+ 345          void osd_menu2_disable(void)
+ 346          {
+ 347   1      #ifdef USE_CQ_WRITE 
+ 348   1        char rc=0;  
+ 349   1      
+ 350   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x18);
+ 351   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 352   1      
+ 353   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 354   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 355   1        if(rc<0)  
+ 356   1          ERROR (("cq_write_byte()\n"));
+ 357   1        if (cq_flush_vsync () < 0)
+ 358   1          ERROR (("cq_flush()\n"));
+ 359   1      #else
+                OSD_CFG_WR(0x10,0x00);    // menu1 disable
+                OSD_CFG_WR(0x00,0x00);    // OSD1 disable
+                IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              #endif
+ 364   1        //OSD2_IS_ENABLE= DISABLE;
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 7   
+
+ 365   1      }
+ 366          
+ 367          /*
+ 368           * Synopsis     void osd_enable(void)  
+ 369           * Description  啟用osd2
+ 370           * Return       none
+ 371           */
+ 372          void osd_enable(void)
+ 373          {
+ 374   1      #ifdef USE_CQ_WRITE
+ 375   1        char rc=0;  
+ 376   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x10);
+ 377   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x80);
+ 378   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 379   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x80);
+ 380   1        if(rc<0)  
+ 381   1          ERROR (("cq_write_byte()\n"));
+ 382   1        if (cq_flush_vsync () < 0)
+ 383   1          ERROR (("cq_flush()\n"));
+ 384   1      #ifdef FIX_FOR_GLOBAL_SHADOW  
+ 385   1        if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+ 386   1          IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+ 387   1      #endif
+ 388   1      #else
+                OSD_CFG_WR(0x10,0x80);    // menu1 enable
+                OSD_CFG_WR(0x00,0x80);    // OSD1 enable
+                IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              #endif
+ 393   1        OSD2_IS_ENABLE= ENABLE;
+ 394   1      }
+ 395          
+ 396          /*
+ 397           * Synopsis     void osd_disable()  
+ 398           * Description  停用osd2
+ 399           * Return       none
+ 400           */
+ 401          void osd_disable()
+ 402          {
+ 403   1      #ifdef USE_CQ_WRITE 
+ 404   1        char rc=0;  
+ 405   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x10);  // menu1
+ 406   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 407   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x18);  // menu2
+ 408   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 409   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 410   1        rc = cq_write_byte(TWIC_P0, 0xA9, 0x00);
+ 411   1        if(rc<0)  
+ 412   1          ERROR (("cq_write_byte()\n"));
+ 413   1        if (cq_flush_vsync () < 0)
+ 414   1          ERROR (("cq_flush()\n"));
+ 415   1      #else
+                OSD_CFG_WR(0x10,0x00);    // menu1 disable
+                OSD_CFG_WR(0x18,0x00);    // menu2 disable
+                OSD_CFG_WR(0x00,0x00);    // OSD1 disable
+                IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              #endif
+ 421   1        OSD2_IS_ENABLE= DISABLE;
+ 422   1      }
+ 423          
+ 424          /*
+ 425           * Synopsis     void osd_update(void) 
+ 426           * Description  刷新osd2
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 8   
+
+ 427           * Return       none
+ 428           */
+ 429          void osd_update(void)
+ 430          {
+ 431   1      #ifdef USE_CQ_WRITE
+ 432   1        if(OSD2_IS_ENABLE) {
+ 433   2          if (cq_flush_vsync () < 0)
+ 434   2            ERROR (("cq_flush()\n"));
+ 435   2        } else {
+ 436   2          if (cq_flush_now () < 0)
+ 437   2            ERROR (("cq_flush()\n"));
+ 438   2        }
+ 439   1      #ifdef FIX_FOR_GLOBAL_SHADOW  
+ 440   1        if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+ 441   1          IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+ 442   1      #endif  
+ 443   1      #else
+                if(OSD2_IS_ENABLE)
+                  IC_WRITBYTE(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);   // Shadow Update  
+              #endif
+ 447   1      }
+ 448          
+ 449          /*
+ 450           * Synopsis     void osd_blink(unsigned char freq, 
+ 451           *                             unsigned char duty);
+ 452           * Description  設定osd2閃爍狀態
+ 453           * Parameters   freq  -頻率
+ 454           *              duty    -占空比 
+ 455           * Return       none
+ 456           */
+ 457          void osd_blink(unsigned char freq, unsigned char duty)
+ 458          {
+ 459   1      #ifdef USE_CQ_WRITE
+ 460   1        char rc=0;
+ 461   1        freq = ((freq<<2)&0x0C);
+ 462   1        duty = (duty&0x03);
+ 463   1        rc = cq_write_byte(TWIC_P0, 0xA8, 0x00);
+ 464   1        rc = cq_write_byte(TWIC_P0, 0xA9, (0x80|freq|duty));
+ 465   1        if(rc<0)  
+ 466   1          ERROR (("cq_write_byte()\n"));
+ 467   1      #else
+                freq = ((freq<<2)&0x0C);
+                duty = (duty&0x03);
+                osd_cfg_wr(0x00,(0x80|freq|duty));    // OSD1 enable
+              #endif
+ 472   1        osd_update();
+ 473   1      }
+ 474          
+ 475          /*
+ 476           * Synopsis     void osd_wr_lut_tbl(unsigned long base_address, 
+ 477           *                                  unsigned short length);
+ 478           * Description  寫入lutRAM
+ 479           * Parameters   base_address  -lut資料地址
+ 480           *              length          -lut資料長度 
+ 481           * Return       none
+ 482           */
+ 483          #define LUT_XRAM_LENGTH   64
+ 484          void osd_wr_lut_tbl(unsigned long base_address, unsigned short length)
+ 485          {
+ 486   1      #if 1
+ 487   1        unsigned char i= 0, j= 0;
+ 488   1        unsigned short count= 0;
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 9   
+
+ 489   1        unsigned char xdata buf[LUT_XRAM_LENGTH];
+ 490   1        
+ 491   1        count= length/LUT_XRAM_LENGTH;
+ 492   1        
+ 493   1        OSD_CFG_WR(0x08, 0x00); // OSD LUT address start point
+ 494   1        IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);
+ 495   1        
+ 496   1        for(i=0; i< count; i++) {
+ 497   2          spi_dma2xram((base_address+(i*LUT_XRAM_LENGTH)), 
+ 498   2              (unsigned short)buf, 
+ 499   2              LUT_XRAM_LENGTH);
+ 500   2          /* I2C burst write */
+ 501   2          for (j = 0; j<LUT_XRAM_LENGTH; j++) {   // OSD LUT table is 512 bytes
+ 502   3            IC_WRITBYTE(TWIC_P0, 0xA9, buf[j]);
+ 503   3          }
+ 504   2      #ifdef DEBUG_OSD2   
+                  dbg(0, ("spi_dma2xram(%08lX, %08X, %08X)\n", 
+                      (base_address+(i*LUT_XRAM_LENGTH)), 
+                      (unsigned short)buf, 
+                      LUT_XRAM_LENGTH));
+              #endif
+ 510   2        }
+ 511   1        
+ 512   1        if((length%LUT_XRAM_LENGTH)) {
+ 513   2          spi_dma2xram((base_address+(i*LUT_XRAM_LENGTH)), 
+ 514   2              (unsigned short)buf, 
+ 515   2              (length%LUT_XRAM_LENGTH));
+ 516   2          
+ 517   2          /* I2C burst write */
+ 518   2          for (j = 0; j<(length%LUT_XRAM_LENGTH); j++) {    // OSD LUT table is 512 bytes
+ 519   3            IC_WRITBYTE(TWIC_P0, 0xA9, buf[j]);
+ 520   3          }
+ 521   2            
+ 522   2      #ifdef DEBUG_OSD2   
+                  dbg(0, ("spi_dma2xram(%08lX, %08X, %08X)\n", 
+                      (base_address+(i*LUT_XRAM_LENGTH)), 
+                      (unsigned short)buff, 
+                      (length%LUT_XRAM_LENGTH)));
+              #endif
+ 528   2        }
+ 529   1      
+ 530   1      #else
+                unsigned short i=0;
+              
+                if(length==0)
+                  return;
+                
+                OSD_CFG_WR(0x08, 0x00); // OSD LUT address start point
+                IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);
+              
+              #ifdef  DEBUG_OSD2  
+                dbg(0, ("osd_wr_lut_tbl(%lX, %u) \n", base_address, length));
+              #endif
+                /* I2C burst write */
+                for (i = 0; i<length; i++) {    // OSD LUT table is 512 bytes
+                  IC_WRITBYTE(TWIC_P0, 0xA9, spi_read_byte(base_address+i));
+                }
+              #endif
+ 547   1      }
+ 548          
+ 549          /*
+ 550           * Synopsis     void osd_wr_2bp_lut_tbl(unsigned long base_address, 
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 10  
+
+ 551           *                                      unsigned short length);
+ 552           * Description  寫入2bp lut映射表
+ 553           * Parameters   base_address  -映射資料地址
+ 554           *              length          -映射資料長度 
+ 555           * Return       none
+ 556           */
+ 557          void osd_wr_2bp_lut_tbl(unsigned long base_address, unsigned char length)
+ 558          {
+ 559   1      #if 1
+ 560   1        unsigned char i= 0;
+ 561   1        unsigned char xdata buf[64];
+ 562   1        
+ 563   1        if(length==0)
+ 564   1          return;
+ 565   1        if(length>64)
+ 566   1          length= 64;
+ 567   1        
+ 568   1        spi_dma2xram((base_address), (unsigned short)buf, length);
+ 569   1        
+ 570   1        OSD_CFG_WR(0x08, 0x90); // OSD LUT address start point
+ 571   1        IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);
+ 572   1      
+ 573   1      #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_wr_2bp_lut_tbl(%lX, %bu) \n", base_address, length));
+              #endif
+ 576   1        
+ 577   1        /* I2C burst write */
+ 578   1        for (i = 0; i<length; i++) {    // OSD C2BP remap table is 64 bytes
+ 579   2          IC_WRITBYTE(TWIC_P0, 0xA9, buf[i]);
+ 580   2      #ifdef  DEBUG_OSD2
+                  dbg(0, ("2BP REMAP[%bu] (%bu) \n", i, buf[i]));
+              #endif
+ 583   2        }
+ 584   1      
+ 585   1      #else
+                unsigned char i=0;
+              
+                if(length==0)
+                  return;
+                
+                OSD_CFG_WR(0x08, 0x90); // OSD LUT address start point
+                IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);
+              
+              #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_wr_2bp_lut_tbl(%lX, %bu) \n", base_address, length));
+              #endif
+                /* I2C burst write */
+                for (i = 0; i<length; i++) {    // OSD C2BP remap table is 64 bytes
+                  IC_WRITBYTE(TWIC_P0, 0xA9, spi_read_byte(base_address+i));
+              #ifdef  DEBUG_OSD2
+                  dbg(0, ("2BP REMAP[%bu] (%bu) \n", i, spi_read_byte(base_address+i)));
+              #endif
+                }
+              #endif
+ 605   1      }
+ 606          
+ 607          /*
+ 608           * Synopsis     void osd_wr_bg_lut_tbl(unsigned long base_address, 
+ 609           *                                unsigned short length);
+ 610           * Description  寫入1bp lut映射表
+ 611           * Parameters   base_address  -映射資料地址
+ 612           *              length          -映射資料長度 
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 11  
+
+ 613           * Return       none
+ 614           */
+ 615          void osd_wr_bg_lut_tbl(unsigned long base_address, unsigned char length)
+ 616          {
+ 617   1      #if 1
+ 618   1        unsigned char i= 0;
+ 619   1        unsigned char xdata buf[6];
+ 620   1        
+ 621   1        if(length==0)
+ 622   1          return;
+ 623   1        if(length>6)
+ 624   1          length= 6;
+ 625   1        
+ 626   1        spi_dma2xram((base_address), (unsigned short)buf, length);
+ 627   1        
+ 628   1        OSD_CFG_WR(0x08, 0x98); // OSD LUT address start point
+ 629   1        IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);
+ 630   1      
+ 631   1      #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_wr_bg_lut_tbl(%lX, %bu) \n", base_address, length));
+              #endif
+ 634   1        
+ 635   1        /* I2C burst write */
+ 636   1        for (i = 0; i<length; i++) {  // OSD background table is 6 bytes
+ 637   2          IC_WRITBYTE(TWIC_P0, 0xA9, buf[i]);
+ 638   2      #ifdef  DEBUG_OSD2
+                  dbg(0, ("BG REMAP[%bu] (%bu) \n", i, buf[i]));
+              #endif
+ 641   2        }
+ 642   1      
+ 643   1      #else
+                unsigned char i=0;
+              
+                if(length==0)
+                  return;
+                
+                OSD_CFG_WR(0x08, 0x98); // OSD LUT address start point
+                IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);   
+              
+              
+              #ifdef  DEBUG_OSD2       
+                dbg(0, ("osd_wr_bg_lut_tbl(%lX, %bu) \n", base_address, length));
+              #endif  
+                /* I2C burst write */
+                for (i = 0; i<length; i++)    // OSD background table is 6 bytes
+                  IC_WRITBYTE(TWIC_P0, 0xA9, spi_read_byte(base_address+i));
+              #endif
+ 660   1      }
+ 661          
+ 662          /*
+ 663           * Synopsis     void osd_wr_regs_tbl(unsigned long base_address, 
+ 664           *                                   unsigned short length);
+ 665           * Description  寫入OSD2設定暫存器之資料表
+ 666           * Parameters   base_address  -映射資料地址
+ 667           *              length          -映射資料長度 
+ 668           * Return       none
+ 669           */
+ 670          void osd_wr_regs_tbl(unsigned long base_address, unsigned char length)
+ 671          {
+ 672   1        unsigned char i=0;
+ 673   1        unsigned char p_tbl[66];
+ 674   1        
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 12  
+
+ 675   1        spi_dma2xram(base_address, (unsigned short)p_tbl, length);
+ 676   1      
+ 677   1      #ifdef  DEBUG_OSD2    
+                  dbg(0, ("osd_wr_regs_tbl(%lX, %bu) \n", base_address, length));
+              #endif  
+ 680   1        
+ 681   1        for(i=0; i<length; i+=2)   {
+ 682   2          OSD_CFG_WR( p_tbl[i], p_tbl[i+1]);  
+ 683   2      #ifdef  DEBUG_OSD2    
+                  dbg(0, ("p_tbl[i] = %02bX, p_tbl[i+1] = %02bX \n", p_tbl[i], p_tbl[i+1]));
+              #endif
+ 686   2        }   
+ 687   1      }
+ 688          
+ 689          /*
+ 690           * Synopsis     osd_wr_menu_start_end( unsigned char menu_idx,
+ 691           *                                     unsigned short menu_start_address, 
+ 692           *                                     unsigned short menu_end_address);
+ 693           * Description  設定OSD2 menu於ORAM之位置
+ 694           * Parameters   menu_idx          - 1: menu1, 2: menu2
+ 695           *              menu_start_address  - menu起始位置
+ 696           *              menu_end_address    - menu結束位置
+ 697           * Return       none
+ 698           */
+ 699          void osd_wr_menu_start_end(unsigned char menu_idx,unsigned short menu_start_address, unsigned short menu_e
+             -nd_address)
+ 700          {
+ 701   1      #ifdef USE_CQ_WRITE
+ 702   1        char rc=0;
+ 703   1      
+ 704   1        if (menu_idx == 1)
+ 705   1        {
+ 706   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x11);
+ 707   2          rc = cq_write_byte(TWIC_P0, 0xA9, (menu_start_address & 0xff));
+ 708   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x12);
+ 709   2          rc = cq_write_byte(TWIC_P0, 0xA9, ((menu_start_address>>8) & 0xff));
+ 710   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x13);
+ 711   2          rc = cq_write_byte(TWIC_P0, 0xA9, (menu_end_address & 0xff));
+ 712   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x14);
+ 713   2          rc = cq_write_byte(TWIC_P0, 0xA9, ((menu_end_address>>8) & 0xff));
+ 714   2        }
+ 715   1        else if (menu_idx == 2)
+ 716   1        {
+ 717   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x19);
+ 718   2          rc = cq_write_byte(TWIC_P0, 0xA9, (menu_start_address & 0xff));
+ 719   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x1A);
+ 720   2          rc = cq_write_byte(TWIC_P0, 0xA9, ((menu_start_address>>8) & 0xff));
+ 721   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x1B);
+ 722   2          rc = cq_write_byte(TWIC_P0, 0xA9, (menu_end_address & 0xff));
+ 723   2          rc = cq_write_byte(TWIC_P0, 0xA8, 0x1C);
+ 724   2          rc = cq_write_byte(TWIC_P0, 0xA9, ((menu_end_address>>8) & 0xff));
+ 725   2        }
+ 726   1        if(rc<0)  
+ 727   1          ERROR (("cq_write_byte()\n"));
+ 728   1        if (cq_flush_vsync () < 0)
+ 729   1          ERROR (("cq_flush()\n"));
+ 730   1      
+ 731   1      #ifdef FIX_FOR_GLOBAL_SHADOW  
+ 732   1        if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+ 733   1          IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+ 734   1      #endif
+ 735   1      
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 13  
+
+ 736   1      #else
+                if (menu_idx == 1)
+                {
+                  OSD_CFG_WR( 0x11, (menu_start_address & 0xff));
+                  OSD_CFG_WR( 0x12, ((menu_start_address>>8) & 0xff));
+                  OSD_CFG_WR( 0x13, (menu_end_address & 0xff));
+                  OSD_CFG_WR( 0x14, ((menu_end_address>>8) & 0xff));
+                }
+                else if (menu_idx == 2)
+                {
+                  OSD_CFG_WR( 0x19, (menu_start_address & 0xff));
+                  OSD_CFG_WR( 0x1a, ((menu_start_address>>8) & 0xff));
+                  OSD_CFG_WR( 0x1b, (menu_end_address & 0xff));
+                  OSD_CFG_WR( 0x1c, ((menu_end_address>>8) & 0xff));
+                }
+                
+                if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+                  IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              
+              #endif
+ 756   1      }
+ 757          
+ 758          /*
+ 759           * Synopsis    void _osd_bmp_pos( unsigned short hstar, 
+ 760           *                                unsigned short vstar);
+ 761           * Description  設定BMP模式下OSD2顯示位置
+ 762           * Parameters   hstar         - X軸起始位置
+ 763           *              vstar           - Y軸起始位置
+ 764           * Return       none
+ 765           */
+ 766          void _osd_bmp_pos(unsigned short hstar, unsigned short vstar)
+ 767          {
+ 768   1      #ifdef USE_CQ_WRITE
+ 769   1        char rc=0;
+ 770   1        /* Set BMP Horizintal Start Position */
+ 771   1        rc = cq_write_byte (TWIC_P0, 0xA8, 0x28);
+ 772   1        rc = cq_write_byte (TWIC_P0, 0xA9, (unsigned char)(hstar & 0xff));
+ 773   1        rc = cq_write_byte (TWIC_P0, 0xA8, 0x29);
+ 774   1        rc = cq_write_byte (TWIC_P0, 0xA9, (unsigned char)(hstar>>8));
+ 775   1        /* Set BMP Vertical Start Position */
+ 776   1        rc = cq_write_byte (TWIC_P0, 0xA8, 0x2A);
+ 777   1        rc = cq_write_byte (TWIC_P0, 0xA9, (unsigned char)(vstar & 0xff));
+ 778   1        rc = cq_write_byte (TWIC_P0, 0xA8, 0x2B);
+ 779   1        rc = cq_write_byte (TWIC_P0, 0xA9, (unsigned char)(vstar>>8));
+ 780   1        if(rc<0)
+ 781   1          ERROR (("cq_write_byte()\n"));
+ 782   1      #else
+                /* Set BMP Horizintal Start Position */
+                OSD_CFG_WR(0x28, (unsigned char)(hstar & 0xff));
+                OSD_CFG_WR(0x29, (unsigned char)(hstar>>8));
+                /* Set BMP Vertical Start Position */
+                OSD_CFG_WR(0x2A, (unsigned char)(vstar & 0xff));
+                OSD_CFG_WR(0x2B, (unsigned char)(vstar>>8));
+              #endif
+ 790   1      }
+ 791          
+ 792          /*
+ 793           * Synopsis    void osd_bmp_star_position( unsigned short hstar, 
+ 794           *                                         unsigned short vstar);
+ 795           * Description  設定BMP模式下OSD2顯示位置(並刷新)
+ 796           * Parameters   hstar         - X軸起始位置
+ 797           *              vstar           - Y軸起始位置
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 14  
+
+ 798           * Return       none
+ 799           */
+ 800          void osd_bmp_star_position(unsigned short hstart, unsigned short vstart)
+ 801          {
+ 802   1        _osd_bmp_pos(hstart, vstart);
+ 803   1        osd_update();
+ 804   1      }
+ 805          
+ 806          /*
+ 807           * Synopsis    void osd_bmp_disable(void) 
+ 808           * Description  關閉BMP模式
+ 809           * Return       none
+ 810           */
+ 811          void osd_bmp_disable(void)
+ 812          {
+ 813   1        OSD_CFG_WR(0x20,0x00); // disable BMP
+ 814   1      }
+ 815          
+ 816          /*
+ 817           * Synopsis    unsigned long _twf_get_bmp_offset ( unsigned long address, 
+ 818           *                                                 unsigned short uc); 
+ 819           * Description  回傳tof物件中某字元之位址
+ 820           * Parameters   address         - tof物件位置
+ 821           *              uc              - utf-16字元
+ 822           * Return       字元位址
+ 823           */
+ 824          unsigned long _twf_get_bmp_offset (unsigned long address, unsigned short uc)
+ 825          {
+ 826   1          unsigned long gnum, i, j, fac;
+ 827   1        unsigned long bmpo;
+ 828   1          unsigned char c, gap; 
+ 829   1        unsigned short fcode, imin, imax, imid;
+ 830   1        unsigned char count = 50;
+ 831   1        
+ 832   1        /* 0x4f = charset address */           
+ 833   1          c  = spi_read_byte(address + 0x4fL);
+ 834   1          gap = 6L;
+ 835   1          if (c == 0L) 
+ 836   1              gap = 5L;
+ 837   1       
+ 838   1          gnum = 0L;
+ 839   1          for(i=0L, fac=1L; i<4L; i++, fac*=256L) { 
+ 840   2          /* 0x58 = the total number of characters address */
+ 841   2              c = spi_read_byte(address + 0x58L + i);
+ 842   2              gnum+=c*fac;
+ 843   2          } 
+ 844   1             
+ 845   1        imin = 1;
+ 846   1        imax = gnum;
+ 847   1           
+ 848   1        while (imax >= imin && count--)
+ 849   1        {             
+ 850   2          imid = (imin+imax)/2L; 
+ 851   2                             
+ 852   2          /* 0x5dL = unicode mapping table start address */
+ 853   2          fcode = spi_read_byte(address + 0x5dL + (imid-1L)*gap); 
+ 854   2          
+ 855   2          if(gap == 6)
+ 856   2            fcode += (spi_read_byte(address + 0x5eL + (imid-1L)*gap)<<8L);
+ 857   2          
+ 858   2          if(fcode <  uc) {  
+ 859   3            imin = imid + 1L;
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 15  
+
+ 860   3          }
+ 861   2          else if(fcode > uc ) {   
+ 862   3            imax = imid - 1L;
+ 863   3          }
+ 864   2          else {
+ 865   3            break;
+ 866   3          }
+ 867   2        } 
+ 868   1      
+ 869   1        if(fcode != uc) { 
+ 870   2          return 0;
+ 871   2        }
+ 872   1      
+ 873   1          bmpo = 0;
+ 874   1          for(j=0L, fac=1L; j<4L; j++, fac*=256L) {    
+ 875   2              c = spi_read_byte(address + 0x5dL + (imid-1L)*gap + (gap - 4L) + j);  
+ 876   2              bmpo+=(c*fac);   
+ 877   2          }  
+ 878   1           
+ 879   1          bmpo = 0x5dL + gnum*gap + bmpo; 
+ 880   1          bmpo += address;   
+ 881   1              
+ 882   1          return bmpo;   
+ 883   1      }
+ 884          
+ 885          /*
+ 886           * Synopsis    void osd_put_twf_char_to_oram ( unsigned long file_address, 
+ 887           *                                             unsigned short oram_address, 
+ 888           *                                             unsigned short uc,  
+ 889           *                                             unsigned short byte_size); 
+ 890           * Description  回傳tof物件中某字元之字型
+ 891           * Parameters   file_address  - tof物件位置
+ 892           *              oram_address    - oram位置
+ 893           *              uc              - utf-16字元
+ 894           *              byte_size       - 字型大小
+ 895           * Return       none
+ 896           */
+ 897          unsigned char osd_put_twf_char_to_oram (unsigned long file_address, unsigned short oram_address, unsigned 
+             -short uc,  unsigned short h_tile_byte_size, unsigned char isHSA)
+ 898          {
+ 899   1        unsigned long bmpo;
+ 900   1        unsigned char w_count;
+ 901   1                              
+ 902   1        bmpo = _twf_get_bmp_offset(file_address, uc); 
+ 903   1        w_count = isHSA ? spi_read_byte(bmpo) : 1;
+ 904   1      
+ 905   1        if(bmpo == 0)
+ 906   1        {
+ 907   2          ERROR (("twf_put_char_to_oram: Unexpected character.\n"));
+ 908   2        }
+ 909   1      
+ 910   1        spi_dma2oram(bmpo+5, oram_address, h_tile_byte_size*w_count); 
+ 911   1      
+ 912   1        return w_count;
+ 913   1      }
+ 914          
+ 915          /*
+ 916           * Synopsis    void osd_set_access_mode_LSB(void);
+ 917           * Description  設定ORAM寫入模式為low byte only mode
+ 918           * Return       none
+ 919           */
+ 920          void osd_set_access_mode_LSB(void) 
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 16  
+
+ 921          { 
+ 922   1        OSD_CFG_WR(0x00, (osd_cfg_read(0x00) & 0xCF) | 0x20);
+ 923   1      }
+ 924          
+ 925          /*
+ 926           * Synopsis    void osd_set_access_mode_MSB(void);
+ 927           * Description  設定ORAM寫入模式為high byte only mode
+ 928           * Return       none
+ 929           */
+ 930          void osd_set_access_mode_MSB(void) 
+ 931          {     
+ 932   1        OSD_CFG_WR(0x00, osd_cfg_read(0x00) | 0x30);
+ 933   1      }
+ 934          
+ 935          /*
+ 936           * Synopsis    void osd_set_access_mode_word(void); 
+ 937           * Description  設定ORAM寫入模式為all byte
+ 938           * Return       none
+ 939           */
+ 940          void osd_set_access_mode_word(void) 
+ 941          {                
+ 942   1        OSD_CFG_WR(0x00, osd_cfg_read(0x00) & 0xCF);
+ 943   1      }
+ 944          
+ 945          /*
+ 946           * Synopsis    void osd_menu_write_byte( unsigned char x, 
+ 947           *                                       unsigned char y, 
+ 948           *                                       unsigned char dat, 
+ 949           *                                       unsigned short menu_address, 
+ 950           *                                       unsigned char menu_width);
+ 951           * Description  寫入menu特定位置
+ 952           * Parameters   x                 - X軸位置(tile)
+ 953           *              y                   - Y軸位置(tile)
+ 954           *              dat                 - 數值
+ 955           *              menu_address        - menu地址
+ 956           *              menu_width          - menu寬度(tile)
+ 957           * Return       none
+ 958           */
+ 959          void osd_menu_write_byte(unsigned char x, unsigned char y, unsigned char dat, unsigned short menu_address,
+             - unsigned char menu_width)
+ 960          {             
+ 961   1        osd_set_location_addr(x, y, menu_address, menu_width);  
+ 962   1        osd_set_access_mode_LSB();
+ 963   1        OSD_SET_RAM_DATA_BYTE(dat);
+ 964   1        osd_set_access_mode_word();
+ 965   1      }
+ 966          
+ 967          /*
+ 968           * Synopsis    void osd_menu_write( unsigned char x, 
+ 969           *                                  unsigned char y, 
+ 970           *                                  unsigned short index, 
+ 971           *                                  unsigned char color, 
+ 972           *                                  unsigned short menu_address, 
+ 973           *                                  unsigned char menu_width);
+ 974           * Description  寫入menu特定位置
+ 975           * Parameters   x                 - X軸位置(tile)
+ 976           *              y                   - Y軸位置(tile)
+ 977           *              index               - 字型索引
+ 978           *              color               - 色盤索引
+ 979           *              menu_address        - menu地址
+ 980           *              menu_width          - menu寬度(tile)
+ 981           * Return       none
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 17  
+
+ 982           */
+ 983          void osd_menu_write(unsigned char x, unsigned char y, unsigned short index, unsigned char color, unsigned 
+             -short menu_address, unsigned char menu_width)
+ 984          {                      
+ 985   1        unsigned short dat = (color<<9) + index;
+ 986   1        osd_set_location_addr(x, y, menu_address, menu_width);  
+ 987   1          OSD_SET_RAM_DATA(dat);
+ 988   1      }
+ 989          
+ 990          /*
+ 991           * Synopsis    void osd_menu_write_line(unsigned char y, 
+ 992           *                                      unsigned short index, 
+ 993           *                                      unsigned char color, 
+ 994           *                                      unsigned short menu_address, 
+ 995           *                                      unsigned char menu_width);
+ 996           * Description  將字型寫入menu特定行
+ 997           *              y                   - Y軸位置(tile)
+ 998           *              index               - 字型索引
+ 999           *              color               - 色盤索引
+1000           *              menu_address        - menu地址
+1001           *              menu_width          - menu寬度(tile)
+1002           * Return       none
+1003           */
+1004          void osd_menu_write_line(unsigned char y, unsigned short index, unsigned char color, unsigned short menu_a
+             -ddress, unsigned char menu_width)
+1005          {                      
+1006   1        unsigned short dat = (color<<9) + index;
+1007   1        
+1008   1        osd_oram_fill((menu_address+((menu_width+4)*y)), menu_width, dat);
+1009   1      }
+1010          
+1011          /*
+1012           * Synopsis    void osd_menu_write_block(unsigned char x, 
+1013           *                                       unsigned char y, 
+1014           *                                       unsigned char width, 
+1015           *                                       unsigned char height,
+1016           *                                       unsigned char index, 
+1017           *                                       unsigned char color, 
+1018           *                                       unsigned short menu_address, 
+1019           *                                       unsigned char menu_width)
+1020           * Description  將字型寫入menu特定區塊
+1021           * Parameters   x                 - X軸位置(tile)
+1022           *              y                   - Y軸位置(tile)
+1023           *              width               - 區塊寬度
+1024           *              height              - 區塊高度
+1025           *              index               - 字型索引
+1026           *              color               - 色盤索引
+1027           *              menu_address        - menu地址
+1028           *              menu_width          - menu寬度(tile)
+1029           * Return       none
+1030           */
+1031          void osd_menu_write_block(unsigned char x, unsigned char y, unsigned char width, unsigned char height, uns
+             -igned char index, unsigned char color, unsigned short menu_address, unsigned char menu_width)
+1032          {                      
+1033   1        unsigned char w, h = 0;
+1034   1        unsigned short dat = (color<<9) + index;
+1035   1        
+1036   1        for(h=0; h<height; h++) {
+1037   2          osd_set_location_addr(x, y+h, menu_address, menu_width);
+1038   2          for(w=0; w< width; w++) {
+1039   3              OSD_SET_RAM_DATA(dat);
+1040   3          }
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 18  
+
+1041   2        }
+1042   1      }
+1043          
+1044          /*
+1045           * Synopsis    void osd_menu_start_h ( unsigned short x, 
+1046           *                                     unsigned short address, 
+1047           *                                     unsigned char width, 
+1048           *                                     unsigned char row);
+1049           * Description  設定menu x軸位置
+1050           * Parameters   x                 - X軸位置
+1051           *              address             - menu oram地址
+1052           *              width               - menu寬度(tile)
+1053           *              row                 - menu高度(tile)
+1054           * Return       none
+1055           */
+1056          #define OSD2_RATTV  0x4000
+1057          #define OSD2_RATTH  0x6000
+1058          void osd_menu_start_h (unsigned short x, unsigned short address, unsigned char width, unsigned char row)
+1059          {
+1060   1        x &= 0x07FF;
+1061   1        
+1062   1        address += ((width+4)*row)+1;
+1063   1        OSD_SET_RAM_ADDR(address);
+1064   1        OSD_SET_RAM_DATA((OSD2_RATTH|x));
+1065   1      #ifdef  DEBUG_OSD2  
+                dbg(0, ("osd_menu_location(%u, %u, 0x%X, %bu) 0x%X, 0x%X \n", x, y, address, width, row, (OSD2_RATTH|x)))
+             -;
+              #endif
+1068   1      }
+1069          
+1070          /*
+1071           * Synopsis    void osd_menu_location ( unsigned short x, 
+1072           *                                      unsigned short y, 
+1073           *                                      unsigned short address, 
+1074           *                                      unsigned char width, 
+1075           *                                      unsigned char height);
+1076           * Description  設定menu位置
+1077           * Parameters   x                 - X軸位置
+1078           *              y                   - Y軸位置
+1079           *              address             - menu oram地址
+1080           *              width               - menu寬度(tile)
+1081           *              row                 - menu高度(tile)
+1082           * Return       none
+1083           */
+1084          void osd_menu_location (unsigned short x, unsigned short y, unsigned short address, unsigned char width, u
+             -nsigned char height)
+1085          {
+1086   1      #if 1   // use CQ for image skew
+1087   1        unsigned char i;
+1088   1      
+1089   1        x &= 0x07FF;
+1090   1        y &= 0x07FF;
+1091   1        
+1092   1        for(i=0; i<height; i++) {
+1093   2          cq_write_word (TWIC_P0, 0xAA, address, 0);
+1094   2          if(i==0)
+1095   2            cq_write_word (TWIC_P0, 0xAB, (OSD2_RATTV|y), 0);
+1096   2          else
+1097   2            cq_write_word (TWIC_P0, 0xAB, 0xE000, 0);
+1098   2          cq_write_word (TWIC_P0, 0xAB, (OSD2_RATTH|x), 0);
+1099   2      #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_menu_location(%u, %u, 0x%X, %bu, %bu) 0x%X, 0x%X \n", x, y, address, width, height, (OSD2_R
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 19  
+
+             -ATTV|y), (OSD2_RATTH|x)));
+              #endif
+1102   2          address += (width + 4);
+1103   2        }
+1104   1      
+1105   1        if (cq_flush_vde () < 0)
+1106   1          ERROR (("cq_flush()\n"));
+1107   1      #else   // no use CQ for speed
+                unsigned char i;
+              
+                x &= 0x07FF;
+                y &= 0x07FF;
+                
+                for(i=0; i<height; i++) {
+                  OSD_SET_RAM_ADDR(address);
+                  if(i==0)
+                    OSD_SET_RAM_DATA((OSD2_RATTV|y));
+                  else
+                    OSD_SET_RAM_DATA(0xE000);
+                  OSD_SET_RAM_DATA((OSD2_RATTH|x));
+              #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_menu_location(%u, %u, 0x%X, %bu, %bu) 0x%X, 0x%X \n", x, y, address, width, height, (OSD2_R
+             -ATTV|y), (OSD2_RATTH|x)));
+              #endif
+                  address += (width + 4);
+                }
+              #endif
+1126   1      }
+1127          
+1128          /*
+1129           * Synopsis    void osd_clear_char( unsigned char x, 
+1130           *                                  unsigned char y, 
+1131           *                                  unsigned short menu_address, 
+1132           *                                  unsigned char menu_width);
+1133           * Description  清除menu特定位置
+1134           * Parameters   x                 - X軸位置(tile)
+1135           *              y                   - Y軸位置(tile)
+1136           *              menu_address        - menu地址
+1137           *              menu_width          - menu寬度(tile)
+1138           * Return       none
+1139           */
+1140          void osd_clear_char(unsigned char x, unsigned char y, unsigned short menu_address, unsigned char menu_widt
+             -h)
+1141          {
+1142   1        /* DEFALUT BLANK FONT INDEX IS 0 */
+1143   1        osd_menu_write_byte(x, y, 0, menu_address, menu_width);
+1144   1      }
+1145          
+1146          /*
+1147           * Synopsis    void osd_clear_line(unsigned char y, 
+1148           *                                 unsigned short menu_address, 
+1149           *                                 unsigned char menu_width);
+1150           * Description  清除menu特定行
+1151           *              y                   - Y軸位置(tile)
+1152           *              menu_address        - menu地址
+1153           *              menu_width          - menu寬度(tile)
+1154           * Return       none
+1155           */
+1156          void osd_clear_line(unsigned char y, unsigned short menu_address, unsigned char menu_width)
+1157          {
+1158   1        /* DEFALUT BLANK FONT INDEX IS 0 */
+1159   1        //osd_menu_write_line(y, 0, 0, menu_address, menu_width);
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 20  
+
+1160   1        unsigned char i= 0;
+1161   1      
+1162   1        osd_set_location_addr(0, y, menu_address, menu_width);
+1163   1        osd_set_access_mode_LSB();
+1164   1        for(i=0; i<menu_width; i++)     
+1165   1            OSD_SET_RAM_DATA_BYTE(0);
+1166   1        osd_set_access_mode_word();
+1167   1      }
+1168          
+1169          /*
+1170           * Synopsis    void osd_clear_block(unsigned char x, 
+1171           *                                  unsigned char y, 
+1172           *                                  unsigned char width, 
+1173           *                                  unsigned char height,
+1174           *                                  unsigned short menu_address, 
+1175           *                                  unsigned char menu_width)
+1176           * Description  清除menu特定區塊
+1177           * Parameters   x                 - X軸位置(tile)
+1178           *              y                   - Y軸位置(tile)
+1179           *              width               - 區塊寬度
+1180           *              height              - 區塊高度
+1181           *              menu_address        - menu地址
+1182           *              menu_width          - menu寬度(tile)
+1183           * Return       none
+1184           */
+1185          void osd_clear_block(unsigned char x, unsigned char y, unsigned char width, unsigned char height, unsigned
+             - short menu_address, unsigned char menu_width)
+1186          {
+1187   1        unsigned char w, h = 0;
+1188   1      
+1189   1      #ifdef VERSION_102  
+                osd_set_access_mode_LSB();
+                /* DEFALUT BLANK FONT INDEX IS 0 */
+                for(h=0; h<height; h++) {
+                  osd_set_location_addr(x, y+h, menu_address, menu_width);
+                  for(w=0; w< width; w++) {
+                      OSD_SET_RAM_DATA_BYTE(0);
+                  }
+                }
+                osd_set_access_mode_word();
+              #else
+1200   1          /* add on version v1.04 for color&font index to clear */
+1201   1        /* DEFALUT BLANK FONT INDEX IS 0x0000 */
+1202   1        for(h=0; h<height; h++) {
+1203   2          osd_set_location_addr(x, y+h, menu_address, menu_width);
+1204   2          for(w=0; w< width; w++) {
+1205   3            osd_set_ram_data(0);
+1206   3          }
+1207   2        }
+1208   1      #endif  
+1209   1      }
+1210          
+1211          /*
+1212           * Synopsis    void osd_clear_menu(unsigned short menu_address, 
+1213           *                                 unsigned char menu_width
+1214           *                                 unsigned char menu_height);
+1215           * Description  清除menu
+1216           * Parameters   menu_address        - menu地址
+1217           *              menu_width          - menu寬度(tile)
+1218           *              menu_height         - menu高度(tile)
+1219           * Return       none
+1220           */
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 21  
+
+1221          void osd_clear_menu(unsigned short menu_address, unsigned char menu_width, unsigned char menu_height)
+1222          {
+1223   1      #ifdef VERSION_102
+                unsigned char i= 0;
+              
+                for(i=0; i<menu_height; i++)  
+                  osd_clear_line(i, menu_address, menu_width);
+              #else
+1229   1          /* add on version v1.04 */
+1230   1        DBG_PRINT("not VERSION_102\n");
+1231   1      
+1232   1        DBG_PRINT("menu_address=%bd, menu_width=%bd, menu_height=%bd\r\n",menu_address, menu_width, menu_height);
+1233   1        
+1234   1          osd_clear_block(0, 0, menu_width, menu_height, menu_address, menu_width);
+1235   1      #endif    
+1236   1      }
+1237          
+1238          /*
+1239           * Synopsis    void osd_oram_dump( unsigned short start_address, 
+1240           *                                 unsigned short length);
+1241           * Description  讀取menu並打印
+1242           * Parameters   start_address        - menu地址
+1243           *              length               - 資料長度
+1244           * Return       none
+1245           */
+1246          void osd_oram_dump(unsigned short start_address, unsigned short length)
+1247          {   
+1248   1        unsigned short count, idx, j, i;
+1249   1        unsigned short read[8];
+1250   1        unsigned short low, high;
+1251   1      
+1252   1        //IC_WritByte(TWIC_P0, 0xf0, 0x40);
+1253   1        start_address = (start_address>>4) << 4;
+1254   1                        
+1255   1        DBG_PRINT("\n                 ", idx); 
+1256   1        for(j = 0; j < 16; j++)
+1257   1        {
+1258   2          DBG_PRINT("  %1hXh ", j); 
+1259   2        }             
+1260   1        DBG_PRINT("\n", j);
+1261   1      
+1262   1        for( idx = start_address, i = 0; idx < start_address + length; idx+=8, i++)
+1263   1        {
+1264   2          IC_WritByte(TWIC_P0, 0xaa, (idx & 0xff));
+1265   2          IC_WritByte(TWIC_P0, 0xaa, (idx & 0xff00)>>8);
+1266   2          IC_WritByte(TWIC_P0, 0xa8, 0x48);
+1267   2          IC_WritByte(TWIC_P0, 0xa9, 0x80);
+1268   2      
+1269   2          count = 0;
+1270   2          while(!(IC_ReadByte(TWIC_P0, 0xaa) & 0x04)) 
+1271   2          {
+1272   3            count++;
+1273   3            if(count == 10240)
+1274   3            {
+1275   4              ERROR (("osd_dump_memory: time out.\n")); 
+1276   4              break;
+1277   4            }
+1278   3          } 
+1279   2      
+1280   2          for(j = 0; j < 8; j++)
+1281   2          {
+1282   3            low = IC_ReadByte(TWIC_P0, 0xab);
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 22  
+
+1283   3            high = IC_ReadByte(TWIC_P0, 0xab);  
+1284   3            read[j] = low + (high<<8);    
+1285   3          }
+1286   2                                
+1287   2          if(i%2 == 0) 
+1288   2          {        
+1289   3            DBG_PRINT("ORAM Dump %04hXh:  ", idx);
+1290   3          }
+1291   2          for(j = 0; j < 8; j++)
+1292   2          {
+1293   3            DBG_PRINT("%04hX ", read[j]);   
+1294   3          } 
+1295   2          if(i%2 == 1)
+1296   2          { 
+1297   3            DBG_PRINT("\n");
+1298   3          }
+1299   2            
+1300   2        } 
+1301   1        //IC_WritByte(TWIC_P0, 0xf0, 0x50);
+1302   1      }
+1303          
+1304          /*
+1305           * Synopsis    void osd_wr_regs_tbl_nf( unsigned char code *p_tbl, 
+1306           *                                      unsigned char length);
+1307           * Description  exmcu寫入osd2設定表
+1308           * Parameters   p_tbl                - 資料指標
+1309           *              length               - 資料長度
+1310           * Return       none
+1311           */
+1312          #ifdef ENABLE_EX_MCU
+              void osd_wr_regs_tbl_nf(unsigned char code *p_tbl, unsigned char length)
+              {
+                unsigned char i=0;
+                //unsigned char p_tbl[66];
+                
+                for(i=0; i<length; i+=2)   {
+                  OSD_CFG_WR( p_tbl[i], p_tbl[i+1]);  
+              #ifdef  DEBUG_OSD2    
+                  dbg (0,("p_tbl[i] = %02bX, p_tbl[i+1] = %02bX \n", p_tbl[i], p_tbl[i+1]));
+              #endif
+                }   
+              }
+              
+              /*
+               * Synopsis    void osd_wr_lut_tbl_nf(unsigned char code *lut, 
+               *                                    unsigned short length);
+               * Description  exmcu寫入osd2 lut表
+               * Parameters   lut                  - 資料指標
+               *              length               - 資料長度
+               * Return       none
+               */
+              void osd_wr_lut_tbl_nf(unsigned char code *lut, unsigned short length)
+              {
+                int i=0;
+              
+                if(length==0)
+                  return;
+                
+                OSD_CFG_WR(0x08, 0x00); // OSD LUT address start point
+                IC_WritByte(TWIC_P0, 0xA8, 0x09);
+              
+              #ifdef  DEBUG_OSD2  
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 23  
+
+                dbg(0, ("osd_wr_lut_tbl(%X, %u) \n", (unsigned short)lut, length));
+              #endif
+                /* I2C burst write */
+                Burst_A_MCU(TWIC_P0, 0xA9);
+                for (i=0; i<length; i++)
+                {
+                  Burst_D_MCU(lut[i]);
+              #ifdef  DEBUG_OSD2    
+                  dbg(0,("lut[%d] = %02bX\n",i, lut[i]));
+              #endif
+                }
+                Burst_P_MCU();
+              }
+              
+              /*
+               * Synopsis    void osd_wr_2bp_lut_tbl_nf(unsigned char code *lut, 
+               *                                        unsigned char length) 
+               * Description  exmcu寫入osd2 2bp lut映射表
+               * Parameters   lut                  - 資料指標
+               *              length               - 資料長度
+               * Return       none
+               */
+              void osd_wr_2bp_lut_tbl_nf(unsigned char code *lut, unsigned char length)
+              {
+                int i=0;
+              
+                if(length==0)
+                  return;
+                
+                OSD_CFG_WR(0x08, 0x90); // OSD LUT address start point
+                IC_WritByte(TWIC_P0, 0xA8, 0x09);
+              
+              #ifdef  DEBUG_OSD2  
+                  dbg(0, ("osd_wr_2bp_lut_tbl(%X, %bu) \n", (unsigned short)lut, length));
+              #endif
+                /* I2C burst write */ 
+                Burst_A_MCU(TWIC_P0, 0xA9);
+                for (i=0; i<length; i++)
+                {
+                  Burst_D_MCU(lut[i]);
+              #ifdef  DEBUG_OSD2    
+                  dbg(0,("lut[%d] = %02bX\n",i, lut[i]));
+              #endif
+                }
+                Burst_P_MCU();
+              }
+              
+              /*
+               * Synopsis    void osd_wr_bg_lut_tbl_nf(unsigned char code *lut, 
+               *                                        unsigned char length) 
+               * Description  exmcu寫入osd2 1bp lut映射表
+               * Parameters   lut                  - 資料指標
+               *              length               - 資料長度
+               * Return       none
+               */
+              void osd_wr_bg_lut_tbl_nf(unsigned char code *lut, unsigned char length)
+              {
+                unsigned char i=0;
+              
+                if(length==0)
+                  return;
+                
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 24  
+
+                OSD_CFG_WR(0x08, 0x98); // OSD LUT address start point
+                IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);   
+              
+              
+              #ifdef  DEBUG_OSD2       
+                dbg(0, ("osd_wr_bg_lut_tbl(%X, %bu) \n", (unsigned short)lut, length));
+              #endif
+                /* I2C burst write */ 
+                Burst_A_MCU(TWIC_P0, 0xA9);
+                for (i=0; i<length; i++)
+                {
+                  Burst_D_MCU(lut[i]);
+              #ifdef  DEBUG_OSD2    
+                  dbg(0,("lut[%d] = %02bX\n",i, lut[i]));
+              #endif
+                }
+                Burst_P_MCU();
+              }
+              
+              #define SPARE_REG_LENGTH  8
+              #define SPARE_REG_ADDR    0xE0
+              #define PAGE1_REG_OFFSET  0xF100
+              
+              /*
+               * Synopsis    void osd_wr_regs_tbl_rb( unsigned long base_address, 
+               *                                      unsigned char length);
+               * Description  exmcu+nor flash寫入osd2設定表
+               * Parameters   base_address         - flash資料位址
+               *              length               - 資料長度
+               * Return       none
+               */
+              void osd_wr_regs_tbl_rb(unsigned long base_address, unsigned char length)
+              {
+                unsigned char count= 0;
+                unsigned char i= 0, j=0;
+              
+                if(length==0)
+                  return;
+              
+              #ifdef  DEBUG_OSD2    
+                  dbg(0, ("osd_wr_regs_tbl_rb(%lX, %bu) \n", base_address, length));
+              #endif  
+                
+                count = (length/SPARE_REG_LENGTH);
+              
+                for(i=0; i< count; i++) {
+                  spi_dma2xram(base_address+(i*SPARE_REG_LENGTH), (PAGE1_REG_OFFSET|SPARE_REG_ADDR), SPARE_REG_LENGTH);
+                  for(j=0; j<SPARE_REG_LENGTH; j+=2) {
+                    OSD_CFG_WR(IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+j), IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+(j+1)));
+              #ifdef  DEBUG_OSD2    
+                    dbg(0, ("p_tbl[%bu] = %02bX, p_tbl[%bu] = %02bX \n", (j+(i*SPARE_REG_LENGTH)), IC_ReadByte(TWIC_P1, SPA
+             -RE_REG_ADDR+j), (j+1+(i*SPARE_REG_LENGTH)), IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+(j+1))));
+              #endif
+                  }
+                }
+              
+                if((length%SPARE_REG_LENGTH)) {
+                  spi_dma2xram(base_address+(i*SPARE_REG_LENGTH), (PAGE1_REG_OFFSET|SPARE_REG_ADDR), (length%SPARE_REG_LEN
+             -GTH));
+                  for(j=0; j<(length%SPARE_REG_LENGTH); j+=2) {
+                    OSD_CFG_WR(IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+j), IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+(j+1)));
+              #ifdef  DEBUG_OSD2    
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 25  
+
+                    dbg(0, ("p_tbl[%bu] = %02bX, p_tbl[%bu] = %02bX \n", (j+(i*SPARE_REG_LENGTH)), IC_ReadByte(TWIC_P1, SPA
+             -RE_REG_ADDR+j), (j+1+(i*SPARE_REG_LENGTH)), IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+(j+1))));
+              #endif
+                  }
+                }   
+              }
+              
+              /*
+               * Synopsis    void osd_wr_lut_tbl_rb( unsigned long base_address, 
+               *                                     unsigned char lut_addr, 
+               *                                     unsigned short length); 
+               * Description  exmcu+nor flash寫入lut表
+               * Parameters   base_address         - flash資料位址
+               *              lut_addr             - lut ram位址
+               *              length               - 資料長度
+               * Return       none
+               */
+              void osd_wr_lut_tbl_rb(unsigned long base_address, unsigned char lut_addr, unsigned short length)
+              {
+                unsigned char count= 0;
+                unsigned char i= 0, j=0;
+              
+                if(length==0)
+                  return;
+              
+              #ifdef  DEBUG_OSD2    
+                  dbg(0, ("osd_wr_lut_tbl_rb(0x%lX, 0x%bX, %bu) \n", base_address, lut_addr, length));
+              #endif  
+                
+                count = (length/SPARE_REG_LENGTH);
+              
+                OSD_CFG_WR(0x08, lut_addr); // OSD LUT address start point
+                IC_WRITBYTE(TWIC_P0, 0xA8, 0x09);
+                
+                for(i=0; i< count; i++) {
+                  spi_dma2xram(base_address+(i*SPARE_REG_LENGTH), (PAGE1_REG_OFFSET|SPARE_REG_ADDR), SPARE_REG_LENGTH);   
+                  for(j=0; j<SPARE_REG_LENGTH; j++) {
+                    IC_WRITBYTE(TWIC_P0, 0xA9, IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+j));
+                  }
+                }
+              
+                if((length%SPARE_REG_LENGTH)) {
+                  spi_dma2xram(base_address+(i*SPARE_REG_LENGTH), (PAGE1_REG_OFFSET|SPARE_REG_ADDR), (length%SPARE_REG_LEN
+             -GTH));
+                  for(j=0; j<(length%SPARE_REG_LENGTH); j++) {
+                    IC_WRITBYTE(TWIC_P0, 0xA9, IC_ReadByte(TWIC_P1, SPARE_REG_ADDR+j));
+                  }
+                }
+              }
+              
+              #endif
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   5487    ----
+   CONSTANT SIZE    =    339    ----
+   XDATA SIZE       =      1     403
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      10
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+C51 COMPILER V7.50   OSD2API                                                               06/16/2017 08:24:34 PAGE 26  
+
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

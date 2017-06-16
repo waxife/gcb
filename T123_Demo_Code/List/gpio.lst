@@ -1,0 +1,122 @@
+C51 COMPILER V7.50   GPIO                                                                  06/16/2017 08:24:38 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE GPIO
+OBJECT MODULE PLACED IN .\Object\gpio.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\gpio.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\s
+                    -ys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\gpio.lst) TABS(2) OBJECT(.\Object\gpio.obj)
+
+line level    source
+
+   1          /*
+   2           *  @file   gpio.c
+   3           *  @brief  GPIO driver 
+   4           *  $Id: gpio.c,v 1.6 2013/08/01 02:55:38 ken Exp $
+   5           *  $Author: ken $
+   6           *  $Revision: 1.6 $
+   7           *
+   8           *  Copyright (c) 2012 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2012/06/11  yc New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "iccontrol.h"
+  16          #include "reg_tw.h"
+  17          #include "tw_irq.h"
+  18          #include "gpio.h"
+  19          /*
+  20           * 摘要 :void setgpio(GPIO gpio_set,unsigned char num)
+  21           *
+  22           * 描述 :设定GPIO
+  23           *
+  24           * 参数 :GPIO gpio_set =>根据GPIO STRUCTURE 设定
+  25           *       unsigned char num =>GPIO 0!7
+  26           *
+  27           * 回传值 :无
+  28           *
+  29           * 注意 : 无
+  30          */
+  31          void setgpio(GPIO gpio_set,unsigned char num)
+  32          {
+  33   1        if(gpio_set.gpio_sel==OUTPUT)
+  34   1        {
+  35   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_OUTPUT_ENABLE,IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_OUTP
+             -UT_ENABLE)|(1<<num));//set OUTPUT
+  36   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_OUTPUT_VALUE,gpio_set.gpio_out_val==1?(IC_ReadByte(TWIC_P1,gp
+             -io_set.gpio_num+GPIO_OUTPUT_VALUE)|1<<num):(IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_OUTPUT_VALUE)&~(1<<num)));//set O
+             -UTPUT value
+  37   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_OPEN_DRAIN,IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_OPEN_DR
+             -AIN)&~(1<<num));//set_open drain
+  38   2        }
+  39   1        else
+  40   1        {
+  41   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_OUTPUT_ENABLE,IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_OUTP
+             -UT_ENABLE)&~(1<<num));//set INPUT
+  42   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_INT_RISING,gpio_set.gpio_rise_edge==1?(IC_ReadByte(TWIC_P1,gp
+             -io_set.gpio_num+GPIO_INT_RISING)|(1<<num)):(IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_INT_RISING)&~(1<<num)));//set ris
+             -e_edge value
+  43   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_INT_FALLING,gpio_set.gpio_fall_edge==1?(IC_ReadByte(TWIC_P1,g
+             -pio_set.gpio_num+GPIO_INT_FALLING)|1<<num):(IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_INT_FALLING)&~(1<<num)));//set fa
+             -ll_edge value
+  44   2          IC_WritByte(TWIC_P1,gpio_set.gpio_num+GPIO_OPEN_DRAIN,IC_ReadByte(TWIC_P1,gpio_set.gpio_num+GPIO_OPEN_DR
+             -AIN)|(1<<num));//set_open drain
+C51 COMPILER V7.50   GPIO                                                                  06/16/2017 08:24:38 PAGE 2   
+
+  45   2        }
+  46   1      }
+  47          /*
+  48           * 摘要 :bit gpio_status(unsigned char gpio_num,unsigned char num)
+  49           *
+  50           * 描述 :取得GPIO STATUS
+  51           *
+  52           * 参数 :unsigned char gpio_num => GPIOA=0x80 GPIOB=0x88 GPIOC=0x90 GPIOD=0x98 GPIOE=0x50
+  53           *       unsigned char num=> 选取GPIO 0~7
+  54           *
+  55           * 回传值 : 0=>low 1=>high
+  56           *
+  57           * 注意 : 无
+  58          */
+  59          bit gpio_status(unsigned char gpio_num,unsigned char num)//1.select GPIOA=1 b=2 c=3 d=4 e=5 f 2.select gpi
+             -o 0~7
+  60          {
+  61   1        bit value;
+  62   1        value=(IC_ReadByte(TWIC_P1,gpio_num+GPIO_STATUS_VALUE)&(1<<num))!=0?1:0;
+  63   1        return value;
+  64   1      }
+  65          /*
+  66           * 摘要 :void gpio_isr(void)
+  67           *
+  68           * 描述 :gpio处理程序
+  69           *
+  70           * 参数 :无
+  71           *
+  72           * 回传值 :无
+  73           *
+  74           * 注意 : 暂无开放
+  75          */
+  76          void gpio_isr(void)
+  77          {
+  78   1        IC_WritByte(TWIC_P1,0x83,0xFF);//CLEAR GPIOA INTERRUPT
+  79   1        
+  80   1        clear_tw_irq(IRQ_GPIO_INT); //CLEAR GPIO INTERRUPT
+  81   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    586    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----       4
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

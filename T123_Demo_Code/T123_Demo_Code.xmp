@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="Windows-1252" ?>
+<TKStudioProject Name="T123_Demo_Code" BuildTool="0" ToolVer="default" Version="3.00" Author="YinHandong[Òüº®¶¬]" ProjectGUID="{49C7EE41-F750-4a02-94F1-663D9D6A384C}">
+    <Files>
+        <Filter Name="Common">
+            <File RelativePath=".\SourceFile\STARTUP.A51" />
+            <File RelativePath="..\tw_lib\sys\BANK_SWITCH.A51" />
+            <File RelativePath=".\SourceFile\c_root.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIOSD.H" />
+                <Header RelativePath=".\INCLUDEFILE\PANEL.H" />
+                <Header RelativePath=".\INCLUDEFILE\CHECK_EVENT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\OSD2API.H" />
+                <Header RelativePath=".\INCLUDEFILE\VIDEO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\T123_DEMO_CODE\INCLUDEFILE\NVP6124.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\GPIO.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\VIDEODETECT.H" />
+            </File>
+            <File RelativePath=".\SourceFile\timer.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath=".\INCLUDEFILE\TIMER.H" />
+            </File>
+            <File RelativePath=".\SourceFile\interrupt.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\IR.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SARKEY.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\GPIO.H" />
+                <Header RelativePath=".\INCLUDEFILE\TIMER.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\TW_TIMER.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+            </File>
+            <File RelativePath=".\SourceFile\check_event.c">
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+                <Header RelativePath=".\INCLUDEFILE\TIMER.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\TW_TIMER.H" />
+                <Header RelativePath=".\INCLUDEFILE\CHECK_EVENT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\VIDEODETECT.H" />
+                <Header RelativePath=".\INCLUDEFILE\PANEL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SARKEY.H" />
+                <Header RelativePath=".\INCLUDEFILE\NVP6124.H" />
+                <Header RelativePath=".\INCLUDEFILE\VIDEO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\T123_DEMO_CODE\INCLUDEFILE\NVP6124.H" />
+            </File>
+            <File RelativePath=".\SourceFile\version.c" />
+        </Filter>
+        <Filter Name="Sys">
+            <File RelativePath="..\tw_lib\sys\tw_irq.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+            </File>
+            <File RelativePath="..\tw_lib\sys\get_eq.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+            </File>
+            <File RelativePath="..\tw_lib\sys\iccontrol.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+            </File>
+        </Filter>
+        <Filter Name="Drivers">
+            <File RelativePath="..\tw_lib\drivers\spirw.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIOSD.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIRW.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\spiosd.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIOSD.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\osd2api.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIRW.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\OSD2API.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\cq.c">
+                <Header RelativePath="C:\KEIL\C51\INC\STRING.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\serial.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\tw_timer.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\TW_TIMER.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\doprnt.c">
+                <Header RelativePath="C:\KEIL\C51\INC\STDIO.H" />
+                <Header RelativePath="C:\KEIL\C51\INC\STDARG.H" />
+                <Header RelativePath="C:\KEIL\C51\INC\STRING.H" />
+                <Header RelativePath="C:\KEIL\C51\INC\CTYPE.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\rc.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIRW.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\i51_i2c_drivers.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\sarkey.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SARKEY.H" />
+            </File>
+            <File RelativePath=".\SourceFile\nvp6124_drv.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SARKEY.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_MASTER.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_GPIO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\TIMER.H" />
+                <Header RelativePath=".\INCLUDEFILE\NVP6124.H" />
+                <Header RelativePath=".\INCLUDEFILE\VIDEO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\T123_DEMO_CODE\INCLUDEFILE\NVP6124.H" />
+                <Header RelativePath=".\INCLUDEFILE\COMMON.H" />
+            </File>
+            <File RelativePath=".\SourceFile\video.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SARKEY.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_MASTER.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_GPIO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\TIMER.H" />
+                <Header RelativePath=".\INCLUDEFILE\NVP6124.H" />
+                <Header RelativePath=".\INCLUDEFILE\VIDEO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\T123_DEMO_CODE\INCLUDEFILE\NVP6124.H" />
+                <Header RelativePath=".\INCLUDEFILE\NVP6124_REG.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\VIDEODETECT.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\i51_i2c_gpio.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_GPIO.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\gpio.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\GPIO.H" />
+            </File>
+        </Filter>
+        <Filter Name="tw_widget_sys">
+            <File RelativePath="..\tw_lib\sys\tw_widget_sys.c">
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIOSD.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\OSD2API.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIRW.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+            </File>
+            <File RelativePath=".\i51\page_handler.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="I51\RES.H" />
+                <Header RelativePath="I51\PAGE_RGB.H" />
+                <Header RelativePath="I51\IGNORE_PAGE.H" />
+            </File>
+        </Filter>
+        <Filter Name="Init">
+            <File RelativePath="..\tw_lib\sys\tw_init.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+            </File>
+            <File RelativePath=".\SourceFile\init.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\IR.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SARKEY.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SERIAL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\GPIO.H" />
+                <Header RelativePath=".\INCLUDEFILE\TIMER.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIRW.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_IRQ.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\OSD2API.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\VIDEODETECT.H" />
+                <Header RelativePath=".\INCLUDEFILE\PANEL.H" />
+            </File>
+            <File RelativePath=".\SourceFile\panel.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath=".\INCLUDEFILE\PANEL.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+            </File>
+            <File RelativePath="..\tw_lib\drivers\videodetect.c">
+                <Header RelativePath="C:\KEIL\C51\INC\REG51.H" />
+                <Header RelativePath="C:\KEIL\C51\INC\STDLIB.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\ICCONTROL.H" />
+                <Header RelativePath="..\TW_LIB\SYS\REG_TW.H" />
+                <Header RelativePath=".\INCLUDEFILE\PANEL.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\VIDEODETECT.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\CQ.H" />
+                <Header RelativePath=".\INCLUDEFILE\VIDEO.H" />
+                <Header RelativePath="\DPJ\JYS¼ÑÓÀÊ¤\T123+NVP6124B_7&apos;&apos;\T123_DEMO_CODE\INCLUDEFILE\NVP6124.H" />
+            </File>
+        </Filter>
+        <Filter Name="Doc">
+            <File RelativePath=".\Releas Note.txt" />
+        </Filter>
+        <Filter Name="main page">
+            <File RelativePath=".\i51\page_RGB.c">
+                <Header RelativePath="C:\KEIL\C51\INC\MATH.H" />
+                <Header RelativePath="C:\KEIL\C51\INC\STDIO.H" />
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="I51\RES.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\SPIOSD.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\OSD2API.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\TW_TIMER.H" />
+                <Header RelativePath="I51\PAGE_RGB.H" />
+            </File>
+            <File RelativePath=".\i51\page_RGB_struct.c">
+                <Header RelativePath="..\TW_LIB\SYS\SYS.H" />
+                <Header RelativePath=".\INCLUDEFILE\CONFIG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\I51_I2C_DRIVERS.H" />
+                <Header RelativePath=".\INCLUDEFILE\DEBUG.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\DOPRNT.H" />
+                <Header RelativePath="..\TW_LIB\SYS\TW_WIDGET_SYS.H" />
+                <Header RelativePath="..\TW_LIB\DRIVERS\RC.H" />
+                <Header RelativePath="I51\RES.H" />
+                <Header RelativePath="I51\PAGE_RGB.H" />
+            </File>
+        </Filter>
+    </Files>
+    <Configurations>
+        <Configuration Name="T123_Demo_Code" CodeMode="2" MemMode="0" RTOS="0" T51FL="0" SIMCLK="33.000000" OCM51="" OCR51="" CodeBank="" OutputDirectory=".\Object\" OutputName="T123_Demo_Code" GENAPP="1" GENLIB="0" ListingDirectory=".\List\" OPTLT="0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0" OPTDBG="1,-1,1,1,1,0,()" DEVICE="DS80C320" VENDOR="Dallas Semiconductor" FAMINY="0">
+            <Tool Name="C51Tool" C51FL="4853008" C51VA="0" C51DEF="" C51UDF="" C51MSC="" INCC5="" />
+            <Tool Name="A51Tool" A51FL="68" A51SET="" A51RST="" A51MSC="" INCA5="" />
+            <Tool Name="Lx51Tool" LX51FL="4" LX51COB="" LX51XDB="" LX51PDB="" LX51BIB="" LX51DAB="" LX51IDB="" LX51PRC="" LX51STK="" LX51COS="" LX51XDS="" LX51BIS="" LX51DAS="" LX51IDS="" LX51OVL="" LX51MSC="" LX51DWN="" />
+            <DeviceProperties Item0='SIM=S8051.DLL DP51.DLL(&quot;-p320&quot;)' Item1="CPU=IRAM(0-0xFF) CLOCK(33000000) MODDP2" Item2='MON=S8051.DLL TP51.DLL(&quot;-p320&quot;)' Item3='REGFILE=REG320.H(&quot;Dallas&quot;)' Item4='SFILE=&quot;LIB\STARTUP.A51&quot; (&quot;Standard 8051 Startup Code&quot;)' Item5='BOOK1=DATASHTS\DALLAS\HIGHSPEED_UG.PDF(&quot;High-Speed User&apos;s Guide&quot;)' Item6='BOOK0=DATASHTS\DALLAS\DS80C32X.PDF(&quot;Data Sheet&quot;)' />
+            <DeviceDescription Description="8051 based High-Speed Micro with 2 DPTRs, WDT,&#x0D;&#x0A;Two Serial Ports, 32 I/O lines, 3 Timers/Counters,&#x0D;&#x0A;13 Interrupts/3 Priority levels, ROM-less,&#x0D;&#x0A;256 Bytes On-chip RAM" />
+        </Configuration>
+    </Configurations>
+</TKStudioProject>

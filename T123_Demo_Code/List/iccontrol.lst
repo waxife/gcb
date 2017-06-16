@@ -1,0 +1,206 @@
+C51 COMPILER V7.50   ICCONTROL                                                             06/16/2017 08:24:33 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE ICCONTROL
+OBJECT MODULE PLACED IN .\Object\iccontrol.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\sys\iccontrol.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\
+                    -sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\iccontrol.lst) TABS(2) OBJECT(.\Object\iccontrol.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   iccontrol.c
+   3           *  @brief  ic control function
+   4           *  $Id: iccontrol.c,v 1.7 2013/04/02 05:42:18 dos1236 Exp $
+   5           *  $Author: dos1236 $
+   6           *  $Revision: 1.7 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include "sys.h"
+  15          #include "reg_tw.h"
+  16          #include "iccontrol.h"
+  17          #include "cq.h"
+  18          
+  19          #define USE_CQ_WRITE
+  20          #define FIX_FOR_GLOBAL_SHADOW
+  21          /*
+  22           * 摘要 :void ClosePanel(unsigned char uR, unsigned char uG, unsigned char uB)
+  23           *
+  24           * 描述 :关闭INPUT影像显示讯号,并且设置内建PATTERN
+  25           *
+  26           * 参数 :unsigned char uR=> 红色值
+  27           *     unsigned char uG=> 绿色值
+  28           *       unsigned char uB=> 蓝色值
+  29           *
+  30           * 回传值 : 无
+  31           *
+  32           * 注意 : 无
+  33          */
+  34          void ClosePanel(unsigned char uR, unsigned char uG, unsigned char uB)
+  35          {
+  36   1      #ifdef USE_CQ_WRITE
+  37   1        cq_config(TWIC_P0, FRAME_CRED_CFG_REG, 1, 3);
+  38   1        cq_data(uR);
+  39   1        cq_data(uG);
+  40   1        cq_data(uB);
+  41   1        cq_write_byte (TWIC_P0, BTIN_PATTERN_REG, 0x87);
+  42   1        cq_write_byte (TWIC_P0, POUT_VSYNC_CTRL_REG, (IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)|POUT_VSYNC_CTRL)
+             -);
+  43   1        cq_trigger_source (CQ_TRIGGER_SW);
+  44   1        cq_flush();
+  45   1      #ifdef FIX_FOR_GLOBAL_SHADOW  
+  46   1        if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+  47   1          IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+  48   1      #endif
+  49   1      #else
+                IC_WritByte(TWIC_P0, FRAME_CRED_CFG_REG, uR);
+                IC_WritByte(TWIC_P0, FRAME_CGRN_CFG_REG, uG);
+                IC_WritByte(TWIC_P0, FRAME_CBLU_CFG_REG, uB);
+                IC_WritByte(TWIC_P0, BTIN_PATTERN_REG, 0x87);
+C51 COMPILER V7.50   ICCONTROL                                                             06/16/2017 08:24:33 PAGE 2   
+
+                IC_WritByte(TWIC_P0, POUT_VSYNC_CTRL_REG, (IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)|POUT_VSYNC_CTRL));
+                
+                if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+                  IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              
+              #endif
+  60   1      }
+  61          /*
+  62           * 摘要 :void OpenPanel(void)
+  63           *
+  64           * 描述 :开启INPUT影像显示讯号
+  65           *
+  66           * 参数 :无
+  67           *
+  68           * 回传值 : 无
+  69           *
+  70           * 注意 : 无
+  71          */
+  72          void OpenPanel(void)
+  73          { 
+  74   1        DBG_PRINT("\r1.  open panel BLUE  !!!\n\r");
+  75   1      #ifdef USE_CQ_WRITE
+  76   1        cq_write_byte (TWIC_P0, POUT_VSYNC_CTRL_REG, (IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&(~POUT_VSYNC_CTR
+             -L)));
+  77   1        cq_write_byte (TWIC_P0, BTIN_PATTERN_REG, 0x07); 
+  78   1        cq_trigger_source (CQ_TRIGGER_VSYNC);
+  79   1        cq_flush();
+  80   1      #ifdef FIX_FOR_GLOBAL_SHADOW  
+  81   1        if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+  82   1          IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+  83   1      #endif    
+  84   1      #else
+                IC_WritByte(TWIC_P0, POUT_VSYNC_CTRL_REG, (IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&(~POUT_VSYNC_CTRL))
+             -);
+                IC_WritByte(TWIC_P0, BTIN_PATTERN_REG, 0x07);
+                
+                if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+                  IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+              
+              #endif
+  92   1      }
+  93          /*
+  94           * 摘要 :void WriteRegsTable(unsigned char code* RegsTable,unsigned char trig)
+  95           *
+  96           * 描述 :针对各种不同INPUT讯号,设置暂存器　
+  97           *
+  98           * 参数 :unsigned char code* RegsTable=> TABLE指针
+  99           *　　　unsigned char trig=>COMMAND QUEUE 触发方式 0:SOFTWARE TRIG 1:VDE TRIG 2:VSYNC TRIG
+ 100           *
+ 101           * 回传值 : 无
+ 102           *
+ 103           * 注意 : 无
+ 104          */
+ 105          void WriteRegsTable(unsigned char code* RegsTable,unsigned char trig)
+ 106          {
+ 107   1        unsigned short Index;
+ 108   1        unsigned short curID;
+ 109   1        unsigned short address=0;
+ 110   1        unsigned char tmp=0;
+ 111   1        curID = TWIC_P0;
+ 112   1        Index = 0;
+ 113   1      #ifdef USE_CQ_WRITE
+C51 COMPILER V7.50   ICCONTROL                                                             06/16/2017 08:24:33 PAGE 3   
+
+ 114   1        cq_WriteRegsTable_issue(RegsTable, 4, trig);
+ 115   1        if (cq_flush () < 0)
+ 116   1          ERROR (("cq_flush()\n"));
+ 117   1      #ifdef FIX_FOR_GLOBAL_SHADOW  
+ 118   1        if((IC_ReadByte(TWIC_P0, SHADOW_CTRL_CONF_REG)&SHADOW_CTRL_CONF_DEFAULT))
+ 119   1          IC_WritByte(TWIC_P0, SHADOW_CTRL_CONF_REG, SHADOW_CTRL_CONF);
+ 120   1      #endif    
+ 121   1      #else
+                IC_WritByte(TWIC_P2,0x3F,0x01);
+                while(1)
+                {
+                  if(RegsTable[Index] == 0xFF)
+                  {
+                    curID += PAGE_OFFSET;
+                    if(curID > TWIC_P3)
+                      break;
+                  }
+                  IC_WritByte(curID,RegsTable[Index],RegsTable[Index+1]);
+                  Index += 2;
+                } 
+              
+                IC_WritByte(TWIC_P2,0x3f,0x00);
+              #endif  
+ 137   1      }
+ 138          
+ 139          #define SHADOW_CTRL_CONF_REG    0xE2
+ 140          #define SHADOW_CTRL_CONF      0x11
+ 141          #define SHADOW_BUSY         0x01
+ 142          /*
+ 143           * 摘要 :void check_shadow(void)
+ 144           *
+ 145           * 描述 :确认SHADOW状态
+ 146           *
+ 147           * 参数 :无
+ 148           *
+ 149           * 回传值 : 无
+ 150           *
+ 151           * 注意 : 无
+ 152          */
+ 153          void check_shadow(void)
+ 154          {
+ 155   1        unsigned short count= 0;
+ 156   1        unsigned char temp= 0;
+ 157   1      
+ 158   1        temp= IC_ReadByte(TWIC_P0,SHADOW_CTRL_CONF_REG);
+ 159   1        
+ 160   1        IC_WritByte(TWIC_P0,SHADOW_CTRL_CONF_REG,SHADOW_CTRL_CONF);
+ 161   1        for(count= 0; count<0xFFFF; count++) {
+ 162   2          if(!(IC_ReadByte(TWIC_P0,SHADOW_CTRL_CONF_REG)&SHADOW_BUSY))
+ 163   2            goto EXIT;
+ 164   2          /* v blanking star */
+ 165   2        }
+ 166   1        ERROR(("NO VSYNC, NEED ENTER FREE RUN STATUS!\r\n"));
+ 167   1      EXIT:
+ 168   1        IC_WritByte(TWIC_P0,SHADOW_CTRL_CONF_REG, temp);  
+ 169   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    413    ----
+   CONSTANT SIZE    =    130    ----
+   XDATA SIZE       =   ----      13
+C51 COMPILER V7.50   ICCONTROL                                                             06/16/2017 08:24:33 PAGE 4   
+
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

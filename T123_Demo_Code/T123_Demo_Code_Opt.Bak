@@ -1,0 +1,93 @@
+### uVision2 Project, (C) Keil Software
+### Do not modify !
+
+ cExt (*.c)
+ aExt (*.s*; *.src; *.a*)
+ oExt (*.obj)
+ lExt (*.lib)
+ tExt (*.txt; *.h; *.inc)
+ pExt (*.plm)
+ CppX (*.cpp)
+ DaveTm { 0,0,0,0,0,0,0,0 }
+
+Target (T123_Demo_Code), 0x0000 // Tools: 'MCS-51'
+GRPOPT 1,(Common),1,0,0
+GRPOPT 2,(Sys),1,0,0
+GRPOPT 3,(Drivers),1,0,0
+GRPOPT 4,(tw_widget_sys),1,0,0
+GRPOPT 5,(Init),1,0,0
+GRPOPT 6,(MainMenu_1),0,0,0
+GRPOPT 7,(Doc),0,0,0
+
+OPTFFF 1,1,2,0,0,0,0,0,<.\SourceFile\STARTUP.A51><STARTUP.A51> 
+OPTFFF 1,2,2,0,0,0,0,0,<..\tw_lib\sys\BANK_SWITCH.A51><BANK_SWITCH.A51> 
+OPTFFF 1,3,1,0,0,33,47,0,<.\SourceFile\c_root.c><c_root.c> 
+OPTFFF 1,4,1,0,0,0,0,0,<.\SourceFile\timer.c><timer.c> 
+OPTFFF 1,5,1,0,0,0,0,0,<.\SourceFile\interrupt.c><interrupt.c> 
+OPTFFF 1,6,1,0,0,0,0,0,<.\SourceFile\check_event.c><check_event.c> 
+OPTFFF 1,7,1,0,0,0,0,0,<.\SourceFile\version.c><version.c> 
+OPTFFF 2,8,1,0,0,0,0,0,<..\tw_lib\sys\tw_irq.c><tw_irq.c> 
+OPTFFF 2,9,1,0,0,0,0,0,<..\tw_lib\sys\get_eq.c><get_eq.c> 
+OPTFFF 2,10,1,0,0,0,0,0,<..\tw_lib\sys\iccontrol.c><iccontrol.c> 
+OPTFFF 3,11,1,0,0,0,0,0,<..\tw_lib\drivers\spirw.c><spirw.c> 
+OPTFFF 3,12,1,0,0,0,0,0,<..\tw_lib\drivers\spiosd.c><spiosd.c> 
+OPTFFF 3,13,1,1090519040,0,168,177,0,<..\tw_lib\drivers\osd2api.c><osd2api.c> 
+OPTFFF 3,14,1,587202560,0,874,882,0,<..\tw_lib\drivers\cq.c><cq.c> 
+OPTFFF 3,15,1,0,0,0,0,0,<..\tw_lib\drivers\serial.c><serial.c> 
+OPTFFF 3,16,1,0,0,0,0,0,<..\tw_lib\drivers\tw_timer.c><tw_timer.c> 
+OPTFFF 3,17,1,0,0,0,0,0,<..\tw_lib\drivers\doprnt.c><doprnt.c> 
+OPTFFF 3,18,1,184549376,0,1333,1341,0,<..\tw_lib\drivers\rc.c><rc.c> 
+OPTFFF 3,19,1,0,0,48,48,0,<..\tw_lib\drivers\i51_i2c_drivers.c><i51_i2c_drivers.c> 
+OPTFFF 3,20,1,0,0,0,0,0,<..\tw_lib\drivers\sarkey.c><sarkey.c> 
+OPTFFF 3,21,1,0,0,0,0,0,<.\SourceFile\nvp6124_drv.c><nvp6124_drv.c> 
+OPTFFF 3,22,1,0,0,61,61,0,<.\SourceFile\video.c><video.c> 
+OPTFFF 3,23,1,0,0,0,0,0,<..\tw_lib\drivers\i51_i2c_gpio.c><i51_i2c_gpio.c> 
+OPTFFF 3,24,1,0,0,0,0,0,<..\tw_lib\drivers\gpio.c><gpio.c> 
+OPTFFF 4,25,1,0,0,1,1,0,<..\tw_lib\sys\tw_widget_sys.c><tw_widget_sys.c> 
+OPTFFF 4,26,1,0,0,0,0,0,<.\SourceFile\page_handler.c><page_handler.c> 
+OPTFFF 5,27,1,0,0,0,0,0,<..\tw_lib\sys\tw_init.c><tw_init.c> 
+OPTFFF 5,28,1,0,0,1,15,0,<.\SourceFile\init.c><init.c> 
+OPTFFF 5,29,1,1409286144,0,430,446,0,<.\SourceFile\panel.c><panel.c> 
+OPTFFF 5,30,1,0,0,0,0,0,<..\tw_lib\drivers\videodetect.c><videodetect.c> 
+OPTFFF 6,31,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_3_PNG.c><page_ID_TD_3_PNG.c> 
+OPTFFF 6,32,1,0,0,170,170,0,<.\SourceFile\page_ID_TD_1_PNG.c><page_ID_TD_1_PNG.c> 
+OPTFFF 6,33,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_2_PNG.c><page_ID_TD_2_PNG.c> 
+OPTFFF 6,34,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_9_PNG.c><page_ID_TD_9_PNG.c> 
+OPTFFF 6,35,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_8_PNG.c><page_ID_TD_8_PNG.c> 
+OPTFFF 6,36,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_7_PNG.c><page_ID_TD_7_PNG.c> 
+OPTFFF 6,37,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_6_PNG.c><page_ID_TD_6_PNG.c> 
+OPTFFF 6,38,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_5_PNG.c><page_ID_TD_5_PNG.c> 
+OPTFFF 6,39,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_4_PNG.c><page_ID_TD_4_PNG.c> 
+OPTFFF 6,40,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_2_PNG_struct.c><page_ID_TD_2_PNG_struct.c> 
+OPTFFF 6,41,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_9_PNG_struct.c><page_ID_TD_9_PNG_struct.c> 
+OPTFFF 6,42,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_8_PNG_struct.c><page_ID_TD_8_PNG_struct.c> 
+OPTFFF 6,43,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_7_PNG_struct.c><page_ID_TD_7_PNG_struct.c> 
+OPTFFF 6,44,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_6_PNG_struct.c><page_ID_TD_6_PNG_struct.c> 
+OPTFFF 6,45,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_5_PNG_struct.c><page_ID_TD_5_PNG_struct.c> 
+OPTFFF 6,46,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_4_PNG_struct.c><page_ID_TD_4_PNG_struct.c> 
+OPTFFF 6,47,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_3_PNG_struct.c><page_ID_TD_3_PNG_struct.c> 
+OPTFFF 6,48,1,0,0,0,0,0,<.\SourceFile\page_ID_TD_1_PNG_struct.c><page_ID_TD_1_PNG_struct.c> 
+OPTFFF 6,49,1,0,0,57,57,0,<.\SourceFile\twbc_layout_struct.c><twbc_layout_struct.c> 
+OPTFFF 7,50,5,0,0,0,0,0,<.\Releas Note.txt><Releas Note.txt> 
+
+ExtF <E:\dpj\T123+AHD\6124\T123+NVP6124B_7''\T123_Demo_Code\INCLUDEFILE\CONFIG.H> 75,75,0,{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
+ExtF <E:\dpj\T123+AHD\6124\T123+NVP6124B_7''\T123_Demo_Code\INCLUDEFILE\DEBUG.H> 17,20,0,{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
+ExtF <E:\dpj\T123+AHD\6124\T123+NVP6124B_7''\TW_LIB\DRIVERS\OSD2API.H> 34,44,0,{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
+
+TARGOPT 1, (T123_Demo_Code)
+ CLK51=33000000
+  OPTTT 1,1,1,0
+  OPTHX 1,65535,0,0,0
+  OPTLX 120,65,8,<.\List\>
+  OPTOX 16
+  OPTLT 1,1,1,0,1,1,0,1,0,0,0,0
+  OPTXL 1,1,1,1,1,1,1,0,0
+  OPTFL 1,0,1
+  OPTAX 0
+  OPTDL (S8051.DLL)()(DP51.DLL)(-p320)(S8051.DLL)()(TP51.DLL)(-p320)
+  OPTDBG 48125,-1,()()()()()()()()()() ()()()()
+  OPTDF 0x0
+  OPTLE <>
+  OPTLC <>
+EndOpt
+

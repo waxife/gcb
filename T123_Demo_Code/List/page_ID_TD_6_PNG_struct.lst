@@ -1,0 +1,14 @@
+C51 COMPILER V9.00   PAGE_ID_TD_6_PNG_STRUCT                                               10/24/2016 11:49:00 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE PAGE_ID_TD_6_PNG_STRUCT
+OBJECT MODULE PLACED IN .\Object\page_ID_TD_6_PNG_struct.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\page_ID_TD_6_PNG_struct.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile
+                    -;..\tw_lib\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\page_ID_TD_6_PNG_struct.lst) OBJECT(.\Object\page_ID
+                    -_TD_6_PNG_struct.obj)
+
+line level    source
+
+*** ERROR C318 OF SourceFile\page_ID_TD_6_PNG_struct.c: can't open file 'SourceFile\page_ID_TD_6_PNG_struct.c'
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  1 ERROR(S)

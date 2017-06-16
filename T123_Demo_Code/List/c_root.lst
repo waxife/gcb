@@ -1,0 +1,743 @@
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE C_ROOT
+OBJECT MODULE PLACED IN .\Object\c_root.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE SourceFile\c_root.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib\sys;..
+                    -\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\c_root.lst) TABS(2) OBJECT(.\Object\c_root.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   c_root.c
+   3           *  @brief  main program for demo code
+   4           *  $Id: c_root.c,v 1.4 2012/12/17 05:30:48 dos1236 Exp $
+   5           *  $Author: dos1236 $
+   6           *  $Revision: 1.4 $
+   7           *
+   8           *  Copyright (c) 2012 Terawins 
+   9           Inc. All rights reserved.
+  10           * 
+  11           *  @date   2012/06/04  ken   New file.
+  12           *
+  13           */
+  14          #include <math.h>
+  15          #include <stdio.h>
+  16          
+  17          #include <reg51.h>
+  18          #include "sys.h"
+  19          #include "tw_widget_sys.h"
+  20          #include "spiosd.h"
+  21          #include "panel.h"
+  22          #include "check_event.h"
+  23          #include "rc.h"
+  24          #include "osd2api.h"
+  25          #include "video.h"
+  26          #include "gpio.h"
+  27          #include "videodetect.h"
+  28          #include "Tw_timer.h"
+  29          #include "timer.h"
+  30          #include "Iccontrol.h"
+  31          
+  32          
+  33          /* init.c */
+  34          extern void init(void);
+  35          extern void nvp6114a_outport_1mux_chseq_mode(unsigned char vformat,unsigned char mode);
+  36          extern unsigned char highlight_flag[5];
+  37          extern void OSDShowMenu(unsigned char item);//
+  38          extern SigState sigstate;
+  39          extern unsigned char MenuIndex;
+  40          
+  41          #define H_FREQ 1
+  42          #define L_FREQ 3
+  43          
+  44          #define K_OFFSET      8
+  45          
+  46          #define   kyADD     1 
+  47          #define   kyMENU        2
+  48          #define   kyDEC     3 
+  49          
+  50          
+  51          /*define SPI CLK and DATA*/
+  52          //SPI_DI    GPC5
+  53          //SPI_CLK   GPC6
+  54          GPIO GPC5 = {OUTPUT,OFF,OFF,HIGH,5,GPIOC};
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 2   
+
+  55          GPIO GPC6 = {OUTPUT,OFF,OFF,HIGH,6,GPIOC};
+  56          
+  57          /*Globle Variable*/
+  58          unsigned char aaa;
+  59          unsigned char bbb;
+  60          bit CD4017_EN_FLAG = 0;
+  61          bit CD4066_EN_FLAG = 0;
+  62          bit VIDEO_FLAG = 0;
+  63          bit TEL0_FLAG = 0;
+  64          bit TEL1_FLAG = 0;
+  65          
+  66          unsigned char dur_cb_sc; /*duration for cable searching*/
+  67          
+  68          
+  69          unsigned char GetKey(void)
+  70          {
+  71   1        unsigned char i,j;
+  72   1        unsigned char temp,temp1;
+  73   1        unsigned char value=0x00;
+  74   1        temp =IC_ReadByte(TWIC_P3, 0x24);
+  75   1        
+  76   1        j=0;
+  77   1        for(i=0;i<10;i++)
+  78   1        {
+  79   2          twdDelay(20);
+  80   2          temp1 =IC_ReadByte(TWIC_P3, 0x24);
+  81   2          if(abs(temp1-temp)<K_OFFSET) j++;
+  82   2        }
+  83   1        if(j<8) return 0;
+  84   1        
+  85   1        if((temp1>=(0x80-K_OFFSET))&&(temp1<=(0x80+K_OFFSET)))
+  86   1        {
+  87   2          value=kyADD;  // +
+  88   2        }
+  89   1        else if((temp1>=(0x55-K_OFFSET))&&(temp1<=(0x55+K_OFFSET)))
+  90   1        {
+  91   2          value=kyMENU;  // menu
+  92   2        }
+  93   1        else if((temp1>=(0x2a-K_OFFSET))&&(temp1<=(0x2a+K_OFFSET)))
+  94   1        {
+  95   2          value=kyDEC;  // ¡ª
+  96   2        }
+  97   1          
+  98   1      
+  99   1        return value;
+ 100   1        
+ 101   1      }
+ 102          
+ 103          
+ 104          void reset_nvp6114a(void)
+ 105          {
+ 106   1          GPIO GPA5 = {OUTPUT,OFF,OFF,HIGH,5,GPIOA};
+ 107   1        GPIO GPA6 = {OUTPUT,OFF,OFF,HIGH,6,GPIOA};
+ 108   1        GPIO GPA7 = {OUTPUT,OFF,OFF,HIGH,7,GPIOA};
+ 109   1      
+ 110   1        GPA5.gpio_out_val = HIGH;
+ 111   1        setgpio(GPA5, 5);
+ 112   1        
+ 113   1        GPA5.gpio_out_val = LOW;
+ 114   1        setgpio(GPA5, 5);
+ 115   1        twdDelay(1);
+ 116   1        GPA5.gpio_out_val = HIGH;
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 3   
+
+ 117   1        setgpio(GPA5, 5);
+ 118   1          //twdDelay(1000);
+ 119   1          setgpio(GPA6, 6);
+ 120   1        setgpio(GPA7, 7);
+ 121   1      }
+ 122          
+ 123          
+ 124          /*Data Transimission Over Simulated SPI*/
+ 125          void SPI_SendData(unsigned char i)
+ 126          {  
+ 127   1        unsigned char n;
+ 128   1        for(n=0; n<8; n++)      
+ 129   1        {       
+ 130   2          //SPI_CLK=0;
+ 131   2          GPC6.gpio_out_val = LOW;
+ 132   2          setgpio(GPC6, 6);
+ 133   2          //_nop_(); _nop_();_nop_();_nop_();
+ 134   2          //Nop();
+ 135   2          //SPI_DI=i&0x80;
+ 136   2          if( (i&0x80)!=0 )
+ 137   2          {
+ 138   3            GPC5.gpio_out_val = HIGH;
+ 139   3            setgpio(GPC5, 5);
+ 140   3          }
+ 141   2          else
+ 142   2          {
+ 143   3            GPC5.gpio_out_val = LOW;
+ 144   3            setgpio(GPC5, 5);
+ 145   3          } 
+ 146   2          //_nop_(); _nop_();_nop_();_nop_();
+ 147   2          //Nop();
+ 148   2          //SPI_CLK=1;
+ 149   2          GPC6.gpio_out_val = HIGH;
+ 150   2          setgpio(GPC6, 6);
+ 151   2          i<<=1;
+ 152   2          //_nop_();_nop_();_nop_();_nop_();
+ 153   2          //Nop();
+ 154   2        }
+ 155   1      }
+ 156          
+ 157          /*Write Command To LCD*/
+ 158          void SPI_WriteComm(unsigned char i)
+ 159          {
+ 160   1        //SPI_CS=0;
+ 161   1        //  _nop_(); _nop_();_nop_();_nop_();
+ 162   1        //Nop();
+ 163   1        // SPI_CLK=0;
+ 164   1        GPC6.gpio_out_val = LOW;
+ 165   1        setgpio(GPC6, 6);
+ 166   1        //_nop_(); _nop_();_nop_();_nop_();
+ 167   1        //Nop();
+ 168   1        //SPI_DI=0;
+ 169   1        GPC5.gpio_out_val = LOW;
+ 170   1        setgpio(GPC5, 5);
+ 171   1        //_nop_(); _nop_();_nop_();_nop_();
+ 172   1        //Nop();
+ 173   1        //SPI_CLK=1;
+ 174   1        GPC6.gpio_out_val = HIGH;
+ 175   1        setgpio(GPC6, 6);
+ 176   1        SPI_SendData(i);
+ 177   1        //_nop_(); _nop_();_nop_();_nop_();
+ 178   1        //Nop();
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 4   
+
+ 179   1        //  SPI_CS=1;
+ 180   1      }
+ 181          
+ 182          /*Write Data To LCD*/
+ 183          void SPI_WriteData(unsigned char i)
+ 184          { 
+ 185   1        //SPI_CS=0;
+ 186   1        //_nop_(); _nop_();_nop_();_nop_();
+ 187   1        //Nop();
+ 188   1        //SPI_CLK=0;
+ 189   1        GPC6.gpio_out_val = LOW;
+ 190   1        setgpio(GPC6, 6);
+ 191   1        //_nop_(); _nop_();_nop_();_nop_();
+ 192   1        //Nop();
+ 193   1        //SPI_DI=1;
+ 194   1        GPC5.gpio_out_val = HIGH;
+ 195   1        setgpio(GPC5, 5);
+ 196   1        //_nop_(); _nop_();_nop_();_nop_();
+ 197   1        //Nop();
+ 198   1        //SPI_CLK=1;
+ 199   1        GPC6.gpio_out_val = HIGH;
+ 200   1        setgpio(GPC6, 6);
+ 201   1        SPI_SendData(i);
+ 202   1        //_nop_(); _nop_();_nop_();_nop_();
+ 203   1        //Nop();
+ 204   1        //SPI_CS=1;
+ 205   1      } 
+ 206          
+ 207          
+ 208          /*  LCD init  */
+ 209          #if 0
+              void LCD_Init(void)
+              {
+                //SPI_RES=1;
+                //Delay(50);
+                twdDelay(50);
+                //SPI_RES=0;
+                //Delay(800);
+                twdDelay(800);
+                //SPI_RES=1;
+                //Delay(800);
+                twdDelay(800);
+                SPI_WriteComm(0x11);
+                //Delay(120); //Delay 120ms
+                twdDelay(700);
+                //--------------------------------Display and color format setting----------------------------//
+                SPI_WriteComm(0x36);
+                SPI_WriteData(0x00);
+                SPI_WriteComm(0x3a);
+                SPI_WriteData(0x06);
+                  
+                SPI_WriteComm(0xB0);
+                SPI_WriteData(0x11);
+                SPI_WriteData(0x00);
+                  
+                SPI_WriteComm(0xB1);
+                SPI_WriteData(0x40);//0x40
+                SPI_WriteData(0x04);  
+                SPI_WriteData(0x0a);
+                //--------------------------------ST7789S Frame rate setting----------------------------------//
+                SPI_WriteComm(0xb2);
+                SPI_WriteData(0x0c);
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 5   
+
+                SPI_WriteData(0x0c);
+                SPI_WriteData(0x00);
+                SPI_WriteData(0x33);
+                SPI_WriteData(0x33);
+                SPI_WriteComm(0xb7);
+                SPI_WriteData(0x35);
+                //---------------------------------ST7789S Power setting--------------------------------------//
+                SPI_WriteComm(0xbb);
+                SPI_WriteData(0x35);
+                SPI_WriteComm(0xc0);
+                SPI_WriteData(0x2c);
+                SPI_WriteComm(0xc2);
+                SPI_WriteData(0x01);
+                SPI_WriteComm(0xc3);
+                SPI_WriteData(0x11);
+                SPI_WriteComm(0xc4);
+                SPI_WriteData(0x20);
+                SPI_WriteComm(0xc6);
+                SPI_WriteData(0x0f);
+                SPI_WriteComm(0xd0);
+                SPI_WriteData(0xa4);
+                SPI_WriteData(0xa1);
+                //--------------------------------ST7789S gamma setting---------------------------------------//
+                SPI_WriteComm(0xe0);
+                SPI_WriteData(0xd0);
+                SPI_WriteData(0x00);
+                SPI_WriteData(0x06);
+                SPI_WriteData(0x09);
+                SPI_WriteData(0x0b);
+                SPI_WriteData(0x2a);
+                SPI_WriteData(0x3c);
+                SPI_WriteData(0x55);
+                SPI_WriteData(0x4b);
+                SPI_WriteData(0x08);
+                SPI_WriteData(0x16);
+                SPI_WriteData(0x14);
+                SPI_WriteData(0x19);
+                SPI_WriteData(0x20);
+                
+                SPI_WriteComm(0xe1);
+                SPI_WriteData(0xd0);
+                SPI_WriteData(0x00);
+                SPI_WriteData(0x06);
+                SPI_WriteData(0x09);
+                SPI_WriteData(0x0b);
+                SPI_WriteData(0x29);
+                SPI_WriteData(0x36);
+                SPI_WriteData(0x54);
+                SPI_WriteData(0x4b);
+                SPI_WriteData(0x0d);
+                SPI_WriteData(0x16);
+                SPI_WriteData(0x14);
+                SPI_WriteData(0x21);
+                SPI_WriteData(0x20);
+                
+                SPI_WriteComm(0x29);
+                
+              }
+              #else
+ 300          void LCD_Init(void)
+ 301          {
+ 302   1        twdDelay(50);
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 6   
+
+ 303   1        twdDelay(800);
+ 304   1        SPI_WriteComm(0x11);
+ 305   1        //--------------------------------Display and color format setting----------------------------//
+ 306   1        SPI_WriteComm(0x36);
+ 307   1        SPI_WriteData(0x70);
+ 308   1        SPI_WriteComm(0x3a);
+ 309   1        SPI_WriteData(0x66);
+ 310   1          
+ 311   1        SPI_WriteComm(0xB0);
+ 312   1        SPI_WriteData(0x11);
+ 313   1        SPI_WriteData(0x80);
+ 314   1          
+ 315   1        SPI_WriteComm(0xB1);
+ 316   1        SPI_WriteData(0x40);//0x40
+ 317   1        SPI_WriteData(0x04);  
+ 318   1        SPI_WriteData(0x0a);
+ 319   1        //--------------------------------ST7789S Frame rate setting----------------------------------//
+ 320   1        SPI_WriteComm(0xb2);
+ 321   1        SPI_WriteData(0x0c);
+ 322   1        SPI_WriteData(0x0c);
+ 323   1        SPI_WriteData(0x00);
+ 324   1        SPI_WriteData(0x33);
+ 325   1        SPI_WriteData(0x33);
+ 326   1      SPI_WriteComm(0xb3);
+ 327   1      SPI_WriteData(0x10);
+ 328   1      SPI_WriteData(0x00);//0x10
+ 329   1      SPI_WriteData(0x00);//0x10
+ 330   1        SPI_WriteComm(0xb7);
+ 331   1        SPI_WriteData(0x35);
+ 332   1        //---------------------------------ST7789S Power setting--------------------------------------//
+ 333   1        SPI_WriteComm(0xbb);
+ 334   1        SPI_WriteData(0x35);
+ 335   1        SPI_WriteComm(0xc0);
+ 336   1        SPI_WriteData(0x2c);
+ 337   1        SPI_WriteComm(0xc2);
+ 338   1        SPI_WriteData(0x01);
+ 339   1        SPI_WriteComm(0xc3);
+ 340   1        SPI_WriteData(0x11);
+ 341   1        SPI_WriteComm(0xc4);
+ 342   1        SPI_WriteData(0x20);
+ 343   1        SPI_WriteComm(0xc6);
+ 344   1        SPI_WriteData(0x0f);
+ 345   1        SPI_WriteComm(0xd0);
+ 346   1        SPI_WriteData(0xa4);
+ 347   1        SPI_WriteData(0xa1);
+ 348   1        //--------------------------------ST7789S gamma setting---------------------------------------//
+ 349   1        SPI_WriteComm(0xe0);
+ 350   1        SPI_WriteData(0xd0);
+ 351   1        SPI_WriteData(0x00);
+ 352   1        SPI_WriteData(0x06);
+ 353   1        SPI_WriteData(0x09);
+ 354   1        SPI_WriteData(0x0b);
+ 355   1        SPI_WriteData(0x2a);
+ 356   1        SPI_WriteData(0x3c);
+ 357   1        SPI_WriteData(0x55);
+ 358   1        SPI_WriteData(0x4b);
+ 359   1        SPI_WriteData(0x08);
+ 360   1        SPI_WriteData(0x16);
+ 361   1        SPI_WriteData(0x14);
+ 362   1        SPI_WriteData(0x19);
+ 363   1        SPI_WriteData(0x20);
+ 364   1      
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 7   
+
+ 365   1        SPI_WriteComm(0xe1);
+ 366   1        SPI_WriteData(0xd0);
+ 367   1        SPI_WriteData(0x00);
+ 368   1        SPI_WriteData(0x06);
+ 369   1        SPI_WriteData(0x09);
+ 370   1        SPI_WriteData(0x0b);
+ 371   1        SPI_WriteData(0x29);
+ 372   1        SPI_WriteData(0x36);
+ 373   1        SPI_WriteData(0x54);
+ 374   1        SPI_WriteData(0x4b);
+ 375   1        SPI_WriteData(0x0d);
+ 376   1        SPI_WriteData(0x16);
+ 377   1        SPI_WriteData(0x14);
+ 378   1        SPI_WriteData(0x21);
+ 379   1        SPI_WriteData(0x20);
+ 380   1      
+ 381   1      
+ 382   1        SPI_WriteComm(0x2a);
+ 383   1        SPI_WriteData(0x00);
+ 384   1        SPI_WriteData(0x0);
+ 385   1        SPI_WriteData(0x01);
+ 386   1        SPI_WriteData(0x3f);
+ 387   1      
+ 388   1        SPI_WriteComm(0x2b);
+ 389   1        SPI_WriteData(0x00);
+ 390   1        SPI_WriteData(0x0);
+ 391   1        SPI_WriteData(0x0);
+ 392   1        SPI_WriteData(239);
+ 393   1      
+ 394   1        SPI_WriteComm(0x29);
+ 395   1      
+ 396   1      }
+ 397          
+ 398          #endif
+ 399          
+ 400          
+ 401          void main(void)
+ 402          {
+ 403   1        char data rc=0;
+ 404   1        TW_EVENT *events;
+ 405   1        unsigned char tm_flag;
+ 406   1        unsigned char ln_status; /*To save the line number*/
+ 407   1      
+ 408   1      
+ 409   1        unsigned long tr1_val;
+ 410   1        unsigned short tr1_freq;
+ 411   1        unsigned long i;
+ 412   1        unsigned char temp;
+ 413   1        /*Set default status of GPIOC*/
+ 414   1        GPIO GPC0 = {OUTPUT,OFF,OFF,HIGH,0,GPIOC}; /*CD4017 clock*/
+ 415   1        GPIO GPC1 = {OUTPUT,OFF,OFF,HIGH,1,GPIOC}; /*CD4017 reset*/
+ 416   1        GPIO GPC2 = {OUTPUT,OFF,OFF,HIGH,2,GPIOC}; /*High four bits control*/
+ 417   1        GPIO GPC3 = {OUTPUT,OFF,OFF,HIGH,3,GPIOC}; /*Line0 control*/
+ 418   1        GPIO GPC4 = {OUTPUT,OFF,OFF,HIGH,4,GPIOC}; /*Line1 control*/
+ 419   1        GPIO GPC5 = {OUTPUT,OFF,OFF,HIGH,5,GPIOC}; /*LCD SPI data*/
+ 420   1        GPIO GPC6 = {OUTPUT,OFF,OFF,HIGH,6,GPIOC}; /*LCD SPI clock*/
+ 421   1        GPIO GPB6 = {OUTPUT,OFF,OFF,HIGH,6,GPIOB}; /*SW enable*/
+ 422   1        
+ 423   1        /*Set default value for variable*/
+ 424   1        ln_status = 0;
+ 425   1        tm_flag = 0;
+ 426   1        VIDEO_FLAG =0;
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 8   
+
+ 427   1        
+ 428   1        init();
+ 429   1      
+ 430   1        #if 1 //No panel was defined
+ 431   1        panel_init();
+ 432   1        #endif
+ 433   1        
+ 434   1        LCD_Init();
+ 435   1      
+ 436   1        spiosd_init(0x11E, 0x24, 0x99, 0x27);
+ 437   1      
+ 438   1        //do_calibration(0);    /* touch panel calibration */
+ 439   1      
+ 440   1        tw_widget_init();
+ 441   1      
+ 442   1        resource_init();/*has not been validated*/
+ 443   1      
+ 444   1        #if 1
+ 445   1        osd_init();/*has not been validated*/
+ 446   1        #endif
+ 447   1        
+ 448   1          //reset_nvp6114a();
+ 449   1        //nvp6114a_outport_1mux_chseq_mode(PAL_MODE, NVP6124_VI_720P_2530);
+ 450   1        //DBG_PRINT("one_mux 720 pal\n");
+ 451   1        //VIPInit(VIP_720P_PAL);  
+ 452   1        CVDInit();
+ 453   1        ClosePanel(0x1D, 0xF0, 0x6C);
+ 454   1        //OpenPanel();
+ 455   1        auto_detection_ctrl(DISABLE);
+ 456   1        //auto_detection_ctrl(ENABLE);
+ 457   1        
+ 458   1        #if 1
+ 459   1        /*CD4017 reset process*/
+ 460   1        GPC1.gpio_out_val = LOW;
+ 461   1        setgpio(GPC1, 1);
+ 462   1        twdDelay(10);
+ 463   1        GPC1.gpio_out_val = HIGH;
+ 464   1        setgpio(GPC1, 1);
+ 465   1        DBG_PRINT("CD4017 reset done \r\n");
+ 466   1        
+ 467   1        GPB6.gpio_out_val = HIGH; /*CD4066 was switched on/off, High->off; LOW->on*/
+ 468   1        setgpio(GPB6, 6);
+ 469   1        DBG_PRINT("Line 9V was switched ON\r\n");
+ 470   1        
+ 471   1        GPC2.gpio_out_val = HIGH; /*Enable D1,2,3,4, D9, RING power supply*/
+ 472   1        setgpio(GPC2, 2);
+ 473   1        DBG_PRINT("Enable D1,2,3,4, D9, RING power supply\r\n");
+ 474   1        
+ 475   1        GPC3.gpio_out_val = HIGH; /*Set line0 to high*/
+ 476   1        setgpio(GPC3, 3);
+ 477   1        DBG_PRINT("Set line0 to high\r\n");
+ 478   1        
+ 479   1        GPC4.gpio_out_val = HIGH; /*Set line1 to high*/
+ 480   1        setgpio(GPC4, 4);
+ 481   1        DBG_PRINT("Set line1 to high\r\n");
+ 482   1        #endif
+ 483   1        
+ 484   1        #if 0 /*TW timer*/
+                tw_timer_open(100);
+                DBG_PRINT("TW_Timer Start, interrupt happen every 2 second\r\n");
+                #endif
+ 488   1        
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 9   
+
+ 489   1        #if 0
+                tr1_freq = 0; 
+                tr1_val = 1;
+                timer1_init(tr1_freq);
+                tr1_open(tr1_val);
+                DBG_PRINT("TR1 run with setting = %d\r\n");
+                #endif
+ 496   1        
+ 497   1        CD4017_EN_FLAG = 0;
+ 498   1        CD4066_EN_FLAG = 0;
+ 499   1        dur_cb_sc = H_FREQ; 
+ 500   1        
+ 501   1        temp =IC_ReadByte(TWIC_P3, 0x24);
+ 502   1        DBG_PRINT("temp = %bd\r\n", temp);
+ 503   1        
+ 504   1        DBG_PRINT("Process run\r\n");
+ 505   1        
+ 506   1      
+ 507   1      
+ 508   1        #if 0
+                while(1)
+                {
+                  temp = IC_ReadByte(TWIC_P0,0x91);
+                  DBG_PRINT("TWIC_P0 = %bd\r\n", temp);
+                  twdDelay(10000); 
+                }
+                #endif
+ 516   1      
+ 517   1        while(1)
+ 518   1        {
+ 519   2          if(CD4066_EN_FLAG)
+ 520   2          {
+ 521   3            /*CD4017 reset process*/
+ 522   3            GPC1.gpio_out_val = LOW;
+ 523   3            setgpio(GPC1, 1);
+ 524   3            twdDelay(10);
+ 525   3            GPC1.gpio_out_val = HIGH;
+ 526   3            setgpio(GPC1, 1);
+ 527   3            DBG_PRINT("CD4017 reset done \r\n");
+ 528   3            
+ 529   3            temp =IC_ReadByte(TWIC_P3, 0x24); /*required, to clean the key buffer.*/
+ 530   3            DBG_PRINT("temp1 = %bd\r\n", temp); /*after readbyte, the key value was updated to -1*/
+ 531   3            
+ 532   3            /*no sure below commanded is necessary*/
+ 533   3            twdDelay(1000); 
+ 534   3          
+ 535   3            temp =IC_ReadByte(TWIC_P3, 0x24);
+ 536   3            DBG_PRINT("temp2 = %bd\r\n", temp); 
+ 537   3            
+ 538   3            check_event();
+ 539   3            events = get_event();
+ 540   3            rc = tw_page_process(events);
+ 541   3      
+ 542   3            temp =IC_ReadByte(TWIC_P3, 0x24);
+ 543   3            DBG_PRINT("temp3 = %bd\r\n", temp);
+ 544   3            
+ 545   3            /**************************************/
+ 546   3            
+ 547   3      
+ 548   3            /*Main process for seeking the cable.*/     
+ 549   3            while(1)
+ 550   3            {
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 10  
+
+ 551   4              for(tm_flag=0;tm_flag<dur_cb_sc;tm_flag++)
+ 552   4              {
+ 553   5                //GPC0.gpio_out_val = LOW;
+ 554   5                //setgpio(GPC0, 0);
+ 555   5                GPB6.gpio_out_val = LOW; /*CD4066 was switched on/off, High->off; LOW->on*/
+ 556   5                setgpio(GPB6, 6);
+ 557   5                if(i!=1)
+ 558   5                {i=1;i=2;}
+ 559   5              }
+ 560   4              for(tm_flag=0;tm_flag<dur_cb_sc;tm_flag++)
+ 561   4              {
+ 562   5                //GPC0.gpio_out_val = HIGH;
+ 563   5                //setgpio(GPC0, 0); 
+ 564   5                GPB6.gpio_out_val = HIGH; /*CD4066 was switched on/off, High->off; LOW->on*/
+ 565   5                setgpio(GPB6, 6);
+ 566   5                if(i!=1)
+ 567   5                {i=1;i=2;}
+ 568   5              }
+ 569   4      
+ 570   4              //DBG_PRINT("IC_ReadByte(TWIC_P3, 0x24) = %x \r\n", IC_ReadByte(TWIC_P3, 0x24));
+ 571   4      
+ 572   4      #if 1
+ 573   4              if(IC_ReadByte(TWIC_P3, 0x24)!=-1) /*if get the key of right and left, processing stop.*/
+ 574   4              {
+ 575   5                CD4066_EN_FLAG = 0;
+ 576   5                temp =IC_ReadByte(TWIC_P3, 0x24);
+ 577   5                DBG_PRINT("temp4 = %bd\r\n", temp);
+ 578   5                DBG_PRINT("while break;\r\n");
+ 579   5                
+ 580   5                twdDelay(1000);
+ 581   5                temp =IC_ReadByte(TWIC_P3, 0x24);
+ 582   5                DBG_PRINT("temp5 = %bd\r\n", temp);
+ 583   5                
+ 584   5                highlight_flag[1] = 5;  /*5 -> yello; 3-> white*/
+ 585   5                OSDShowMenu(1); /*update main page*/
+ 586   5                
+ 587   5                break; /*break frequency output*/
+ 588   5              }
+ 589   4      #endif
+ 590   4              
+ 591   4            }
+ 592   3      
+ 593   3          }
+ 594   2          
+ 595   2          if(CD4017_EN_FLAG)//TW_TIMER_OUT_FLAG, TIMER1_OUT_FLAG && CD4017_EN_FLAG
+ 596   2          {
+ 597   3            //tw_timer_close();
+ 598   3            //TW_TIMER_OUT_FLAG = 0;
+ 599   3            
+ 600   3            GPB6.gpio_out_val = HIGH; /*CD4066 was switched on/off, High->off; LOW->on*/
+ 601   3            setgpio(GPB6, 6);
+ 602   3            DBG_PRINT("Line 9V was switched off\r\n");
+ 603   3      
+ 604   3            twdDelay(1000); 
+ 605   3          
+ 606   3            temp =IC_ReadByte(TWIC_P3, 0x24);
+ 607   3            DBG_PRINT("temp2 = %bd\r\n", temp); 
+ 608   3            
+ 609   3            while(1)
+ 610   3            {
+ 611   4              temp =IC_ReadByte(TWIC_P3, 0x24);
+ 612   4              DBG_PRINT("temp normal = %bd\r\n", temp); 
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 11  
+
+ 613   4              
+ 614   4              GPC0.gpio_out_val = LOW;
+ 615   4              setgpio(GPC0, 0);
+ 616   4                      
+ 617   4              for(i=0;i<50;i++)
+ 618   4              {
+ 619   5                twdDelay(100); /*10ms delay*/
+ 620   5              
+ 621   5                if(IC_ReadByte(TWIC_P3, 0x24)!=-1) /*if get the key of right and left, processing stop.*/
+ 622   5                {
+ 623   6                  CD4017_EN_FLAG = 0;
+ 624   6                  //twdDelay(1000); 
+ 625   6                  temp =IC_ReadByte(TWIC_P3, 0x24);
+ 626   6                  DBG_PRINT("temp a = %bd\r\n", temp); 
+ 627   6                  //break;
+ 628   6                }
+ 629   5              }
+ 630   4            
+ 631   4              GPC0.gpio_out_val = HIGH;
+ 632   4              setgpio(GPC0, 0);
+ 633   4      
+ 634   4              for(i=0;i<50;i++)
+ 635   4              {
+ 636   5                twdDelay(100); /*10ms delay*/
+ 637   5              
+ 638   5                if(IC_ReadByte(TWIC_P3, 0x24)!=-1) /*if get the key of right and left, processing stop.*/
+ 639   5                {
+ 640   6                  CD4017_EN_FLAG = 0;
+ 641   6                  //twdDelay(1000); 
+ 642   6                  temp =IC_ReadByte(TWIC_P3, 0x24);
+ 643   6                  DBG_PRINT("temp b = %bd\r\n", temp); 
+ 644   6                  //break;
+ 645   6                }
+ 646   5              }
+ 647   4              
+ 648   4              if(CD4017_EN_FLAG==0)
+ 649   4              {
+ 650   5                DBG_PRINT("Jump out while = %bd\r\n"); 
+ 651   5                highlight_flag[2] = 5;  /*5 -> yello; 3-> white*/
+ 652   5                OSDShowMenu(1); /*update main page*/
+ 653   5                break;
+ 654   5              }
+ 655   4            }
+ 656   3          
+ 657   3          }
+ 658   2      
+ 659   2          if(MenuIndex==7)
+ 660   2          {
+ 661   3            if(TEL0_FLAG)
+ 662   3            {
+ 663   4              DBG_PRINT("Line inject test start\r\n"); 
+ 664   4              GPC4.gpio_out_val = HIGH;
+ 665   4              setgpio(GPC4, 4);
+ 666   4              GPC3.gpio_out_val = LOW;
+ 667   4              setgpio(GPC3, 3);
+ 668   4              TEL0_FLAG = 0;
+ 669   4            }
+ 670   3            if(TEL1_FLAG)
+ 671   3            {
+ 672   4              DBG_PRINT("Line loop test start\r\n"); 
+ 673   4              GPC4.gpio_out_val = LOW;
+ 674   4              setgpio(GPC4, 4);
+C51 COMPILER V7.50   C_ROOT                                                                06/16/2017 08:24:31 PAGE 12  
+
+ 675   4              GPC3.gpio_out_val = LOW;
+ 676   4              setgpio(GPC3, 3);
+ 677   4              TEL1_FLAG = 0;
+ 678   4            }
+ 679   3          }
+ 680   2      
+ 681   2          check_event();
+ 682   2          //get_command();
+ 683   2          events = get_event();
+ 684   2          rc = tw_page_process(events);
+ 685   2          //put_nodify(events, rc);
+ 686   2      
+ 687   2        }
+ 688   1      }
+*** WARNING C280 IN LINE 409 OF SOURCEFILE\C_ROOT.C: 'tr1_val': unreferenced local variable
+*** WARNING C280 IN LINE 410 OF SOURCEFILE\C_ROOT.C: 'tr1_freq': unreferenced local variable
+ 689          
+ 690          
+ 691          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2884    ----
+   CONSTANT SIZE    =    410    ----
+   XDATA SIZE       =      7      47
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       1
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      5    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

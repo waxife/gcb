@@ -1,0 +1,632 @@
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 1   
+
+
+C51 COMPILER V7.50, COMPILATION OF MODULE SERIAL
+OBJECT MODULE PLACED IN .\Object\serial.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ..\tw_lib\drivers\serial.c LARGE OMF2 BROWSE INCDIR(.\IncludeFile;..\tw_lib
+                    -\sys;..\tw_lib\drivers) DEFINE(T123AI) DEBUG PRINT(.\List\serial.lst) TABS(2) OBJECT(.\Object\serial.obj)
+
+line level    source
+
+   1          /**
+   2           *  @file   serial.c
+   3           *  @brief  serial driver for hellen
+   4           *  $Id: serial.c,v 1.10 2013/06/17 04:08:18 ken Exp $
+   5           *  $Author: ken $
+   6           *  $Revision: 1.10 $
+   7           *
+   8           *  Copyright (c) 2011 Terawins Inc. All rights reserved.
+   9           * 
+  10           *  @date   2011/08/12  ken   New file.
+  11           *
+  12           */
+  13          
+  14          #include <reg51.h>
+  15          #include "sys.h"
+  16          #include "reg_tw.h"
+  17          #include "tw_irq.h"
+  18          #include "iccontrol.h"
+  19          #include "serial.h"
+  20          #include "config.h"
+  21          
+  22          #ifndef UART_BUFF_SIZE
+  23            #define UART_BUFF_SIZE  10
+  24          #endif
+  25          
+  26          extern unsigned char xdata CONFIG_REGS[];
+  27          
+  28          /* USE EXTERNAL UART */
+  29          static unsigned char xdata *UART_BASE = &CONFIG_REGS[0x400];
+  30          static unsigned char xdata *UART1_BASE = &CONFIG_REGS[0x500];
+  31          
+  32          //#define UART_BUFF_SIZE  10
+  33          unsigned char uqueue[UART_BUFF_SIZE];
+  34          unsigned char ufront=UART_BUFF_SIZE-1; 
+  35          unsigned char urear=UART_BUFF_SIZE-1;
+  36          
+  37          #ifdef I2C_DEBUG_MODE 
+              unsigned char i2c_count=0x00;
+              #endif
+  40          
+  41          #define UART_RBR            (0x00)
+  42          #define UART_THR            (0x00)
+  43          #define UART_DLL            (0x00)
+  44          #define UART_DLH            (0x04)
+  45          #define UART_FCR          (0x08)
+  46          #define UART_LCR            (0x0c)
+  47          #define UART_MCR          (0x10)
+  48          #define UART_LSR            (0x14)
+  49          #define UART_SCR            (0x1c)
+  50          #define UART_IER            (0x04)
+  51          #define UART_SWR            (0x88)
+  52          #define MAX_FIFO      32
+  53          #define CONFIG_APB_CLK    27000000L
+  54          
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 2   
+
+  55          #ifdef  HW_UART_BAUD
+  56          #define UART_CLKDIV     ((CONFIG_APB_CLK+(HW_UART_BAUD*8))/(HW_UART_BAUD*16))
+  57          #else
+              #define UART_BAUD           38400L
+              #define UART_CLKDIV     ((CONFIG_APB_CLK+(UART_BAUD*8))/(UART_BAUD*16))
+              #endif
+  61          
+  62          #ifdef  HW_UART1_BAUD
+              #define UART1_CLKDIV      ((CONFIG_APB_CLK+(HW_UART1_BAUD*8))/(HW_UART1_BAUD*16))
+              #else
+  65          #define UART1_BAUD           38400L
+  66          #define UART1_CLKDIV      ((CONFIG_APB_CLK+(UART1_BAUD*8))/(UART1_BAUD*16))
+  67          #endif
+  68          /* APB: 27Mhz, UART baud rate: 19200, UART_CLKDIV: 88 */
+  69          
+  70          
+  71          #ifdef FIFO
+              static unsigned char fifo[MAX_FIFO];
+              static unsigned char qf = 0;
+              static unsigned char qt = 0;
+              #endif
+  76          /*
+  77           * 摘要 :void serial_init_tw(void)
+  78           *
+  79           * 描述 :uart 0 初始化
+  80           *
+  81           * 参数 :无
+  82           *
+  83           * 回传值 : 无
+  84           *
+  85           * 注意 : 无
+  86          */
+  87          void serial_init_tw(void)
+  88          {
+  89   1        UART_BASE[UART_SWR] = 0x07;//software reset
+  90   1        UART_BASE[UART_LCR] = 0x83;
+  91   1        UART_BASE[UART_DLH] = (UART_CLKDIV >> 8);
+  92   1        UART_BASE[UART_DLL] = (UART_CLKDIV & 0xff);
+  93   1        UART_BASE[UART_LCR] = 3;  // N-8-1
+  94   1        UART_BASE[UART_FCR] = 0xC1;
+  95   1          UART_BASE[UART_IER] = 1;
+  96   1      }
+  97          /*
+  98           * 摘要 :void serial_interrupt(void)
+  99           *
+ 100           * 描述 :uart 0 中断开启
+ 101           *
+ 102           * 参数 :无
+ 103           *
+ 104           * 回传值 :无
+ 105           *
+ 106           * 注意 : 无
+ 107          */
+ 108          void serial_interrupt(void)
+ 109          {
+ 110   1        UART_BASE[UART_FCR] = 0xC7;
+ 111   1        UART_BASE[UART_IER] = 1;
+ 112   1      
+ 113   1        enable_tw_irq(IRQ_UART0_INT);
+ 114   1      }
+ 115          /*
+ 116           * 摘要 :void serial1_init_tw(void)
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 3   
+
+ 117           *
+ 118           * 描述 :uart 1 初始化
+ 119           *
+ 120           * 参数 :无
+ 121           *
+ 122           * 回传值 : 无
+ 123           *
+ 124           * 注意 : 无
+ 125          */
+ 126          #if 1
+ 127          void serial1_init_tw(void)
+ 128          {
+ 129   1        UART1_BASE[UART_SWR] = 0x07;//software reset
+ 130   1        UART1_BASE[UART_LCR] = 0x83;
+ 131   1        UART1_BASE[UART_DLH] = (UART1_CLKDIV >> 8);
+ 132   1        UART1_BASE[UART_DLL] = (UART1_CLKDIV & 0xff);
+ 133   1        UART1_BASE[UART_LCR] = 3; // N-8-1
+ 134   1      #ifdef ENABLE_UART1_AFC 
+                UART1_BASE[UART_MCR] = 0x20;
+              #endif  
+ 137   1        UART1_BASE[UART_FCR] = 0xC1;
+ 138   1        UART1_BASE[UART_IER] = 1;
+ 139   1      }
+ 140          /*
+ 141           * 摘要 :void serial1_interrupt(void)
+ 142           *
+ 143           * 描述 :uart 1 中断开启
+ 144           *
+ 145           * 参数 :无
+ 146           *
+ 147           * 回传值 :无
+ 148           *
+ 149           * 注意 : 无
+ 150          */
+ 151          void serial1_interrupt(void)
+ 152          {
+ 153   1        UART1_BASE[UART_FCR] = 0xC7;
+ 154   1        UART1_BASE[UART_IER] = 1;
+ 155   1      
+ 156   1        enable_tw_irq(IRQ_UART1_INT);
+ 157   1      }
+ 158          
+ 159          #endif
+ 160          
+ 161          #if 0
+              char putc_t(char a0)
+              { 
+                unsigned short k1;
+              
+                if(UART_BASE[UART_SCR] == 0)
+                  k1 = 200;
+                else
+                  k1 = 6000;
+              
+                while(1)
+                {
+                  k1--;
+                  if(k1 == 0)
+                    goto EXIT;
+              
+                  if(UART_BASE[UART_LSR] & 0x40 == 0)
+                    continue;
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 4   
+
+              
+                  UART_BASE[UART_THR] = a0;
+                  return 0;
+                }
+              
+              EXIT:
+                UART_BASE[UART_SCR] = 1;          // mark timeout
+                UART_BASE[UART_THR] = a0;
+                return 0;
+              }
+              
+              char puts_t(char* s0)
+              {
+                char* idx = s0;
+                while( *(idx))
+                {
+                  putc_t(*idx);
+                  idx++;
+                }
+              
+                return 0;
+              }
+              #endif
+ 202          /*
+ 203           * 摘要 :static void fill_fifo(void)
+ 204           *
+ 205           * 描述 :uart 使用fifo buffer
+ 206           *
+ 207           * 参数 :无
+ 208           *
+ 209           * 回传值 :无
+ 210           *
+ 211           * 注意 : 无
+ 212          */
+ 213          #ifdef FIFO
+              static void fill_fifo(void)
+              {
+                unsigned char xdata q;
+                q = qf+1;
+              
+                if(q>MAX_FIFO)
+                  q = 0;
+              
+                while(q != qt && UART_BASE[UART_LSR] & 0x01)
+                {
+                  fifo[qf] = UART_BASE[UART_RBR];
+                  qf = q;
+              
+                  q++;
+                  if(q >= MAX_FIFO)
+                    q = 0;
+                }
+              }
+              #endif
+ 233          /*
+ 234           * 摘要 :void putb2_t(const char c)
+ 235           *
+ 236           * 描述 :uart 0 输出一个byte
+ 237           *
+ 238           * 参数 :无
+ 239           *
+ 240           * 回传值 :无
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 5   
+
+ 241           *
+ 242           * 注意 : 无
+ 243          */
+ 244          void putb2_t(const char c)
+ 245          {
+ 246   1        unsigned char i;
+ 247   1        //EA=0;
+ 248   1        for(i = 0; i < 255; i++)
+ 249   1        {
+ 250   2          if(UART_BASE[UART_LSR] & 0x40)
+ 251   2            break;
+ 252   2      #ifdef FIFO
+                  fill_fifo();
+              #endif
+ 255   2        }
+ 256   1      
+ 257   1        UART_BASE[UART_THR] = c;
+ 258   1        //EA=1;
+ 259   1      }
+ 260          /*
+ 261           * 摘要 :void put1b_t(unsigned char c)
+ 262           *
+ 263           * 描述 :uart 1 输出一个byte
+ 264           *
+ 265           * 参数 :无
+ 266           *
+ 267           * 回传值 :无
+ 268           *
+ 269           * 注意 : 无
+ 270          */
+ 271          void put1b_t(unsigned char c)
+ 272          {
+ 273   1        unsigned char i;
+ 274   1        
+ 275   1        for(i = 0; i < 255; i++)
+ 276   1        {
+ 277   2          if(UART1_BASE[UART_LSR] & 0x40)
+ 278   2            break;
+ 279   2        }
+ 280   1      
+ 281   1        UART1_BASE[UART_THR] = c;
+ 282   1      
+ 283   1      }
+ 284          /*
+ 285           * 摘要 :void putb_t(const char c)
+ 286           *
+ 287           * 描述 :uart输出一个字元
+ 288           *
+ 289           * 参数 :const char c=>要输出的字元
+ 290           *
+ 291           * 回传值 :无
+ 292           *
+ 293           * 注意 : 无
+ 294          */
+ 295          #ifndef I2C_DEBUG_MODE
+ 296          void putb_t(const char c)  
+ 297          {
+ 298   1        if(c == '\n')
+ 299   1          putb2_t('\r');
+ 300   1      
+ 301   1        putb2_t(c);
+ 302   1      }
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 6   
+
+ 303          #endif
+ 304          /*
+ 305           * 摘要 :void putb_t(const char c)
+ 306           *
+ 307           * 描述 :i2c debug使用
+ 308           *
+ 309           * 参数 :const char c=>要输出的字元
+ 310           *
+ 311           * 回传值 :无
+ 312           *
+ 313           * 注意 : 须搭配额外软体
+ 314          */
+ 315          #ifdef  I2C_DEBUG_MODE
+              void putb_t(const char c)
+              {
+                  if(i2c_count==0x00)
+                  {
+                     IC_WritByte(TWIC_P1,0xE0+i2c_count,0x80);
+                  }
+                  i2c_count++;
+                  if(i2c_count>=16)
+                  {
+                    
+                  }
+                  else if(c == '\n')
+                  {
+                     IC_WritByte(TWIC_P1,(0xE0+i2c_count),'\r');
+                     IC_WritByte(TWIC_P1,(0xE0+i2c_count+1),'\n');
+                     IC_WritByte(TWIC_P1,(0xE0+i2c_count+2),0);
+                  }
+                  else
+                  {
+                    IC_WritByte(TWIC_P1,0xE0+i2c_count,c);
+                  }
+              }
+              #endif
+ 339          /*
+ 340           * 摘要 :char getb2_t(void)
+ 341           *
+ 342           * 描述 :轮询取得uart所传的资料
+ 343           *
+ 344           * 参数 :无
+ 345           *
+ 346           * 回传值 :-1 => 无资料 c=>uart所取得的字元
+ 347           *
+ 348           * 注意 : 无
+ 349          */
+ 350          char getb2_t(void)
+ 351          {
+ 352   1      #ifdef FIFO
+                char xdata c;
+                fill_fifo();
+                if(qt == qf)
+                  return -1;
+              
+                c = fifo[qt];
+                qt++;
+                if(qt > MAX_FIFO)
+                  qt = 0;
+              
+                return c;
+              #else
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 7   
+
+ 365   1        if(UART_BASE[UART_LSR] & 0x01)
+ 366   1          return UART_BASE[UART_RBR];
+ 367   1      
+ 368   1        return -1;
+ 369   1      #endif
+ 370   1      }
+ 371          /*
+ 372           * 摘要 :char getb_t(void)
+ 373           *
+ 374           * 描述 :轮询取得uart所传得资料
+ 375           *
+ 376           * 参数 :无
+ 377           *
+ 378           * 回传值 :回传uart得到的资料
+ 379           *
+ 380           * 注意 : 无
+ 381          */
+ 382          char getb_t(void)
+ 383          {
+ 384   1        char xdata c;
+ 385   1        while(1)
+ 386   1        {
+ 387   2          c = getb2_t();
+ 388   2          if(c >= 0)
+ 389   2            break;
+ 390   2        }
+ 391   1        return c;
+ 392   1      }
+ 393          /*
+ 394           * 摘要 :void getuart(void)
+ 395           *
+ 396           * 描述 :uart0 将uart中断的资料储存到 buffer内
+ 397           *
+ 398           * 参数 :无
+ 399           *
+ 400           * 回传值 :无
+ 401           *
+ 402           * 注意 : 无
+ 403          */
+ 404          void getuart(void)
+ 405          {
+ 406   1        unsigned char a=0x00;
+ 407   1        unsigned short count=0x00;    
+ 408   1        while(UART_BASE[0x14] & 0x01)
+ 409   1        {
+ 410   2          a=UART_BASE[0x00];
+ 411   2          urear=(urear+1)%UART_BUFF_SIZE;
+ 412   2          if(urear==ufront)
+ 413   2          {
+ 414   3            if(urear==0)
+ 415   3            {
+ 416   4              urear=UART_BUFF_SIZE-1;//max value
+ 417   4            }
+ 418   3            else
+ 419   3            {
+ 420   4              urear=urear-1;
+ 421   4            }
+ 422   3          }
+ 423   2          else
+ 424   2          {
+ 425   3            uqueue[urear]=a;
+ 426   3          }
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 8   
+
+ 427   2          count++;
+ 428   2          if(count>0xff00)
+ 429   2            break;  
+ 430   2        }
+ 431   1        clear_tw_irq(IRQ_UART0_INT);
+ 432   1      }
+ 433          /*
+ 434           * 摘要 :unsigned char uartevent(unsigned char *value)
+ 435           *
+ 436           * 描述 :将uart buffer内的资料取出
+ 437           *
+ 438           * 参数 :unsigned char *value =>资料会给到这个指标
+ 439           *
+ 440           * 回传值 :0=>没资料 1=>有资料
+ 441           *
+ 442           * 注意 : 无
+ 443          */
+ 444          unsigned char uartevent(unsigned char *value)
+ 445          {
+ 446   1        unsigned char temp=0x00;
+ 447   1        if(ufront==urear)
+ 448   1        {
+ 449   2          return 0;
+ 450   2        }
+ 451   1        else
+ 452   1        {
+ 453   2          ufront=(ufront+1)%UART_BUFF_SIZE;
+ 454   2          temp=uqueue[ufront];
+ 455   2          *value=temp;
+ 456   2          return 1;
+ 457   2        }
+ 458   1      }
+ 459          /*
+ 460           * 摘要 :void getuart1(void)
+ 461           *
+ 462           * 描述 :uart1 将uart中断的资料储存到 buffer内
+ 463           *
+ 464           * 参数 :无
+ 465           *
+ 466           * 回传值 :无
+ 467           *
+ 468           * 注意 : 无
+ 469          */
+ 470          void getuart1(void)
+ 471          {
+ 472   1        unsigned char a=0x00;
+ 473   1        unsigned short count=0x00;    
+ 474   1        while(UART1_BASE[0x14] & 0x01)
+ 475   1        {
+ 476   2          a=UART1_BASE[0x00];
+ 477   2          urear=(urear+1)%UART_BUFF_SIZE;
+ 478   2          if(urear==ufront)
+ 479   2          {
+ 480   3            if(urear==0)
+ 481   3            {
+ 482   4              urear=UART_BUFF_SIZE-1;//max value
+ 483   4            }
+ 484   3            else
+ 485   3            {
+ 486   4              urear=urear-1;
+ 487   4            }
+ 488   3          }
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 9   
+
+ 489   2          else
+ 490   2          {
+ 491   3            uqueue[urear]=a;
+ 492   3          }
+ 493   2          count++;
+ 494   2          if(count>0xff00)
+ 495   2            break;      
+ 496   2        }
+ 497   1        clear_tw_irq(IRQ_UART1_INT);
+ 498   1      }
+ 499          
+ 500          /******************************************************************************
+ 501          *
+ 502          * serial_init - initialize a channel
+ 503          *
+ 504          * set the selected baud rate and use timer1.
+ 505          *
+ 506          * RETURNS: N/A
+ 507          */
+ 508          
+ 509          /*
+ 510           * 摘要 :void serial_init (void)
+ 511           *
+ 512           * 描述 :uart 0 and uart1 初始化
+ 513           *
+ 514           * 参数 :无
+ 515           *
+ 516           * 回传值 :无
+ 517           *
+ 518           * 注意 : 无
+ 519          */
+ 520          void serial_init (void)
+ 521          {
+ 522   1        /* USE EXTERNAL UART */
+ 523   1        // use UART0
+ 524   1        serial_init_tw();
+ 525   1        // use UART1
+ 526   1        serial1_init_tw();
+ 527   1        // select external UART
+ 528   1        IC_WritByte(TWIC_P1,0xFD,0x01);
+ 529   1        // enable all io pads
+ 530   1        IC_WritByte(TWIC_P0, PW_MGRCTRL_REG, (IC_ReadByte(TWIC_P0, PW_MGRCTRL_REG)|PWRDN_TOTALPAD));
+ 531   1        // select UART0 RS232RX/RS232TX pin function
+ 532   1        IC_WritByte(TWIC_P1, PIN_FUNCTION_REG, ((IC_ReadByte(TWIC_P1, PIN_FUNCTION_REG)&(~UART0_MASK))|UART0_EN))
+             -;  
+ 533   1        // select UART1 RS232RX/RS232TX pin function
+ 534   1        //IC_WritByte(TWIC_P1, PIN_FUNCTION_REG, (IC_ReadByte(TWIC_P1,PIN_FUNCTION_REG)|UART1_EN));
+ 535   1      #ifdef ENABLE_UART1_AFC 
+                // select UART1 flow control RTS/CTS pin function
+                IC_WritByte(TWIC_P1, PIN_FUNCTION_REG, ((IC_ReadByte(TWIC_P1,PIN_FUNCTION_REG)&(~RLUD_CPUINT_MASK))|RS232
+             -_AFC_EN));
+              #endif    
+ 539   1        IC_WritByte(TWIC_P0,0xE0,0x98); // enable all io pads
+ 540   1      }
+ 541          /*
+ 542           * 摘要 :void set_baudrate0(unsigned long baudrate)
+ 543           *
+ 544           * 描述 :uart 0 设定 baudrate 
+ 545           *
+ 546           * 参数 :unsigned long baudrate => 设定baudrate 的值
+ 547           *
+ 548           * 回传值 :无
+C51 COMPILER V7.50   SERIAL                                                                06/16/2017 08:24:35 PAGE 10  
+
+ 549           *
+ 550           * 注意 : 无
+ 551          */
+ 552          void set_baudrate0(unsigned long baudrate)
+ 553          {
+ 554   1        unsigned short uart_clock=0x00;
+ 555   1        uart_clock= ((CONFIG_APB_CLK+(baudrate*8))/(baudrate*16));
+ 556   1        UART_BASE[UART_LCR] = 0x83;
+ 557   1        UART_BASE[UART_DLH] = (uart_clock >> 8);
+ 558   1        UART_BASE[UART_DLL] = (uart_clock & 0xff);
+ 559   1        UART_BASE[UART_LCR] = 3;  // N-8-1
+ 560   1        UART_BASE[UART_FCR] = 0xC1;
+ 561   1          UART_BASE[UART_IER] = 1;
+ 562   1      }
+ 563          /*
+ 564           * 摘要 :void set_baudrate1(unsigned long baudrate)
+ 565           *
+ 566           * 描述 :uart 1 设定 baudrate 
+ 567           *
+ 568           * 参数 :unsigned long baudrate => 设定baudrate 的值
+ 569           *
+ 570           * 回传值 :无
+ 571           *
+ 572           * 注意 : 无
+ 573          */
+ 574          void set_baudrate1(unsigned long baudrate)
+ 575          {
+ 576   1        unsigned short uart_clock=0x00;
+ 577   1        uart_clock= ((CONFIG_APB_CLK+(baudrate*8))/(baudrate*16));
+ 578   1        UART1_BASE[UART_LCR] = 0x83;
+ 579   1        UART1_BASE[UART_DLH] = (uart_clock >> 8);
+ 580   1        UART1_BASE[UART_DLL] = (uart_clock & 0xff);
+ 581   1        UART1_BASE[UART_LCR] = 3; // N-8-1
+ 582   1        UART1_BASE[UART_FCR] = 0xC1;
+ 583   1          UART1_BASE[UART_IER] = 1;
+ 584   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1076    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     16       8
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

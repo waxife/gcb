@@ -1,0 +1,315 @@
+/**
+ *  @file   c_root.c
+ *  @brief  main program for demo code
+ *  $Id: c_root.c,v 1.4 2012/12/17 05:30:48 dos1236 Exp $
+ *  $Author: dos1236 $
+ *  $Revision: 1.4 $
+ *
+ *  Copyright (c) 2012 Terawins Inc. All rights reserved.
+ * 
+ *  @date   2012/06/04  ken 	New file.
+ *
+ */
+
+#include <reg51.h>
+#include "sys.h"
+#include "i51_i2c_gpio.h"
+#include "tw_widget_sys.h"
+#include "touch.h"
+#include "spiosd.h"
+#include "panel.h"
+#include "check_event.h"
+#include "rc.h"
+#include "osd2api.h"
+
+/* init.c */
+extern void init(void);
+
+void mipi_init(void)
+{
+    unsigned char cmd=0;
+	unsigned char val[8]={0};
+    	
+	spi_write_cmd(0x00BC);spi_write_reg(0x0005);spi_write_cmd(0x00BF);
+	spi_write_reg(0xAAFF);spi_write_reg(0xA555);spi_write_reg(0x0080);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x116F);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x20F7);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x066F);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0xA0F7);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x196F);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x12F7);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x066F);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x02FC);
+		
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55F0);spi_write_reg(0x52AA);spi_write_reg(0x0008);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x68B1);spi_write_reg(0x0001);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x08B6);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x026F);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x08B8);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x54BB);spi_write_reg(0x0044);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x01C7);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x02BD);spi_write_reg(0x1EB0);spi_write_reg(0x001E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x01C5);spi_write_reg(0x0007);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x83C8);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55F0);spi_write_reg(0x52AA);spi_write_reg(0x0108);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x05B0);spi_write_reg(0x0005);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x05B1);spi_write_reg(0x0005);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x80BC);spi_write_reg(0x0001);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x80BD);spi_write_reg(0x0001);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x00CA);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x04C0);
+spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);
+spi_write_reg(0x00B2);//spi_write_reg(0x0000);
+spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x29BE);	
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x28B3);spi_write_reg(0x0028);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x14B4);spi_write_reg(0x0014);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x34B9);spi_write_reg(0x0034);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);
+	spi_write_reg(0x25BA);spi_write_reg(0x0025);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55F0);spi_write_reg(0x52AA);spi_write_reg(0x0208);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x01EE);
+	
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55F0);spi_write_reg(0x52AA);spi_write_reg(0x0608);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x0BB0);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EB1);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EB2);spi_write_reg(0x0009);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2AB3);spi_write_reg(0x0029);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x1BB4);spi_write_reg(0x0019);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B5);spi_write_reg(0x0015);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x13B6);spi_write_reg(0x0011);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x01B7);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EB8);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EB9);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EBA);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EBB);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EBC);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x10BD);spi_write_reg(0x0012);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x14BE);spi_write_reg(0x0016);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x18BF);spi_write_reg(0x001A);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x29C0);spi_write_reg(0x002A);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x08C1);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EC2);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EC3);spi_write_reg(0x000A);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EE5);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x0AC4);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EC5);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EC6);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2AC7);spi_write_reg(0x0029);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x10C8);spi_write_reg(0x0012);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x14C9);spi_write_reg(0x0016);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x18CA);spi_write_reg(0x001A);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x08CB);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ECC);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ECD);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ECE);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ECF);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ED0);spi_write_reg(0x0009);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x1BD1);spi_write_reg(0x0019);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17D2);spi_write_reg(0x0015);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x13D3);spi_write_reg(0x0011);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x29D4);spi_write_reg(0x002A);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x01D5);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ED6);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2ED7);spi_write_reg(0x000B);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x2EE6);spi_write_reg(0x002E);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00D8);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00D9);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x00E7);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55F0);spi_write_reg(0x52AA);spi_write_reg(0x0308);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x20B0);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x20B1);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x05B2);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x05B6);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x05B7);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x57BA);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x57BB);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0005);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00C0);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0005);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00C1);spi_write_reg(0x0000);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x60C4);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x40C5);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55F0);spi_write_reg(0x52AA);spi_write_reg(0x0508);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x03BD);spi_write_reg(0x0301);spi_write_reg(0x0303);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B0);spi_write_reg(0x0006);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B1);spi_write_reg(0x0006);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B2);spi_write_reg(0x0006);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B3);spi_write_reg(0x0006);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B4);spi_write_reg(0x0006);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x17B5);spi_write_reg(0x0006);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0xB8B8);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x00B9);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x00BA);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x02BB);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x00BC);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x07C0);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x80C4);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0xA4C5);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x05C8);spi_write_reg(0x0030);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x01C9);spi_write_reg(0x0031);
+
+    spi_write_cmd(0x00BC);spi_write_reg(0x0004);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00CC);spi_write_reg(0x3C00);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0004);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00CD);spi_write_reg(0x3C00);
+	
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00D1);spi_write_reg(0x0905);spi_write_reg(0x1007);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x00D2);spi_write_reg(0x0E05);spi_write_reg(0x1007);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x06E5);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x06E6);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x06E7);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x06E8);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x06E9);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x06EA);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x30ED);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x116F);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x01F3);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0002);spi_write_cmd(0x00BF);spi_write_reg(0x0035);
+}
+void ssd2828_init(void)
+{
+    unsigned char cmd=0;
+	unsigned char val[8]={0};
+
+    spi_write_cmd(0x00B1);spi_write_reg(0x0408);
+	spi_write_cmd(0x00B2);spi_write_reg(0x1414);
+	spi_write_cmd(0x00B3);spi_write_reg(0x1414);
+	spi_write_cmd(0x00B4);spi_write_reg(0x0320);//0x0500
+	spi_write_cmd(0x00B5);spi_write_reg(0x0500);//0x0320
+	spi_write_cmd(0x00B6);spi_write_reg(0x003b);
+	//spi_write_cmd(0x00B6);dbg(2,("B6:0x%04x\n",spi_read_reg()));
+	
+	spi_write_cmd(0x00DE);spi_write_reg(0x0003);
+
+	spi_write_cmd(0x00D6);spi_write_reg(0x0004);
+	spi_write_cmd(0x00B9);spi_write_reg(0x0000);
+	spi_write_cmd(0x00BA);spi_write_reg(0xC014);
+	spi_write_cmd(0x00BB);spi_write_reg(0x0008);
+	spi_write_cmd(0x00B9);spi_write_reg(0x0001);
+	spi_write_cmd(0x00B8);spi_write_reg(0x0000);
+	spi_write_cmd(0x00B7);spi_write_reg(0x0342);	
+}
+void open_videomode(void)
+{
+#if 0
+	spi_write_cmd(0x00BC);spi_write_reg(0x0001);spi_write_cmd(0x00BF);spi_write_reg(0x0011);
+	twdDelay(200*10);
+
+	spi_write_cmd(0x00BC);spi_write_reg(0x0001);spi_write_cmd(0x00BF);spi_write_reg(0x0029);
+	twdDelay(100*10);
+#else
+    //just for mipi test
+    spi_write_cmd(0x00BC);spi_write_reg(0x0006);spi_write_cmd(0x00BF);
+	spi_write_reg(0x55f0);spi_write_reg(0x52aa);spi_write_reg(0x0008);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0003);spi_write_cmd(0x00BF);spi_write_reg(0x0Fef);spi_write_reg(0x00ff);
+	spi_write_cmd(0x00BC);spi_write_reg(0x0005);spi_write_cmd(0x00BF);
+	spi_write_reg(0x87ee);spi_write_reg(0x0278);spi_write_reg(0x0040);
+#endif
+	spi_write_cmd(0x00B7);spi_write_reg(0x0309);
+    twdDelay(200);
+}
+
+void reset_mipi_panel(void)
+{
+	IC_WritByte(TWIC_P1,0x63,0xFF);
+	IC_WritByte(TWIC_P1,0x62,0x82);
+	twdDelay(200);
+	IC_WritByte(TWIC_P1,0x62,0x02);
+	twdDelay(200);
+	IC_WritByte(TWIC_P1,0x62,0x82);
+	twdDelay(1500);
+}
+
+void main(void)
+{
+	char data rc=0;
+	TW_EVENT *events;
+    
+	init();
+
+	panel_init();
+
+	spiosd_init(0x11E, 0x24, 0x99, 0x27);
+
+	//do_calibration(0);		/* touch panel calibration */
+
+	tw_widget_init();
+
+	resource_init();
+
+	osd_init();
+	reset_mipi_panel();
+	spi_gpio_init();
+	ssd2828_init();
+    mipi_init();
+	open_videomode();
+	
+	while(1) 
+	{
+		check_event();
+		//get_command();
+		events = get_event();
+		rc = tw_page_process(events);
+		//put_nodify(events, rc);
+#if 0 //just for ssd2828 test
+    //spi_write_cmd(0x00B0);
+    //dbg(2,("ID:0x%04x\n",spi_read_reg()));
+	spi_write_cmd(0x00B7);
+	spi_write_reg(0x0382);
+	spi_write_cmd(0x00B8);
+	spi_write_reg(0x0000);
+	spi_write_cmd(0x00C4);
+	spi_write_reg(0x0001);
+	spi_write_cmd(0x00C1);
+	spi_write_reg(0x0002);
+	spi_write_cmd(0x00C0);
+	spi_write_reg(0x0001);
+	spi_write_cmd(0x00BC);
+	spi_write_reg(0x0001);
+	spi_write_cmd(0x00BF);
+	spi_write_reg(0x000A);
+
+	spi_write_cmd(0x00C6);
+	if(spi_read_reg()&(1<<0))
+	{
+	    dbg(2,("C6 == 1\n"));
+	    spi_write_cmd(0x00FF);
+		dbg(2,("FF:0x%04x\n",spi_read_reg()));
+	}
+	else
+	{
+		dbg(2,("C6 == 0\n"));
+	}
+	//dbg(2,("ID:0x%04x\n",spi_read_reg()));
+	twdDelay(3000);
+#endif
+
+	}
+}
